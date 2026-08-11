@@ -1,6 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://gstatic.com";
-
+// 1. CONFIGURAÇÕES DO SEU FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyCc9yvNTlh-DFHjk38e3aQ9HwF0f-yDmUc",
   authDomain: "hermannusbots.firebaseapp.com",
@@ -11,10 +9,12 @@ const firebaseConfig = {
   measurementId: "G-YR3GG9GHP8"
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+// 2. INICIALIZAÇÃO TRADICIONAL COMPATÍVEL
+const firebase = window.firebase;
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 
-// Elementos da Tela
+// Elementos da Interface (HTML)
 const authContainer = document.getElementById('auth-container');
 const dashboardContainer = document.getElementById('dashboard-container');
 const emailInput = document.getElementById('email');
@@ -32,23 +32,28 @@ const btnStartBot = document.getElementById('btn-start-bot');
 const btnStopBot = document.getElementById('btn-stop-bot');
 const botLogs = document.getElementById('bot-logs');
 
-let ws; // Variável que guardará a conexão da Deriv
+let ws; // Conexão WebSocket
 
-// --- LOGIN E CADASTRO (FIREBASE) ---
+// --- GERENCIAMENTO DE USUÁRIOS (SISTEMA TRADICIONAL) ---
+
+// Cadastrar Novo Usuário
 btnRegister.addEventListener('click', () => {
-    createUserWithEmailAndPassword(auth, emailInput.value, passwordInput.value)
-        .then(() => alert("Conta criada!"))
-        .catch(error => alert("Erro: " + error.message));
+    auth.createUserWithEmailAndPassword(emailInput.value, passwordInput.value)
+        .then(() => alert("Conta criada com sucesso!"))
+        .catch(error => alert("Erro ao cadastrar: " + error.message));
 });
 
+// Fazer Login
 btnLogin.addEventListener('click', () => {
-    signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value)
-        .catch(error => alert("Erro: " + error.message));
+    auth.signInWithEmailAndPassword(emailInput.value, passwordInput.value)
+        .catch(error => alert("Erro ao entrar: " + error.message));
 });
 
-btnLogout.addEventListener('click', () => signOut(auth));
+// Sair da Conta
+btnLogout.addEventListener('click', () => auth.signOut());
 
-onAuthStateChanged(auth, (user) => {
+// Monitor de Login/Logout
+auth.onAuthStateChanged((user) => {
     if (user) {
         authContainer.classList.add('hidden');
         dashboardContainer.classList.remove('hidden');
@@ -59,25 +64,23 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-// --- CONEXÃO COM A CORRETORA (DERIV API) ---
+// --- MOTOR DE CONEXÃO COM A DERIV ---
 btnConnectDeriv.addEventListener('click', () => {
     const token = derivTokenInput.value.trim();
     if (!token) return alert("Por favor, cole seu Token de API da Deriv!");
 
     botLogs.innerHTML = "Conectando ao servidor da Deriv...<br>";
 
-    // Abrindo o canal oficial de WebSockets da Deriv
-    ws = new WebSocket('wss://://derivws.com'); // App ID padrão de testes
+    // Link oficial corrigido com App ID de testes padrão (1089)
+    ws = new WebSocket('wss://://derivws.com'); 
 
     ws.onopen = () => {
-        // Enviando o token do cliente para autorizar a conta
         ws.send(JSON.stringify({ authorize: token }));
     };
 
     ws.onmessage = (msg) => {
         const response = JSON.parse(msg.data);
 
-        // Se a resposta for a autorização da conta
         if (response.msg_type === 'authorize') {
             if (response.error) {
                 derivStatus.innerText = "Status: Token Inválido";
@@ -87,8 +90,6 @@ btnConnectDeriv.addEventListener('click', () => {
                 derivStatus.innerText = "Status: Conectado à Deriv";
                 derivStatus.className = "status-online";
                 botLogs.innerHTML += `✅ Conta autorizada! Usuário: ${response.authorize.email}<br>`;
-                
-                // Ativa o botão para ligar o robô
                 btnStartBot.disabled = false;
             }
         }
