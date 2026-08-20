@@ -16,8 +16,8 @@ const selectRobo = document.getElementById('select-robo');
 let wsBot = null;
 let tokenDeriv = "";
 
-// O seu App ID alfanumérico da Deriv
-const MEU_APP_ID = "34aspGUGPyiOkGCgGtkUw";
+// App ID universal numérico da Deriv para garantir compatibilidade total no OAuth
+const MEU_APP_ID = "1089";
 
 // --- CONTROLE DE USUÁRIOS LOCAL (LOGIN / CADASTRO) ---
 if (btnRegister) {
@@ -73,33 +73,35 @@ function verificarSessao() {
     }
 }
 
-// --- REDIRECIONAMENTO AUTOMÁTICO OAUTH DERIV (SEM COVAR DE TOKEN) ---
+// --- REDIRECIONAMENTO OAUTH 1 CLIQUE (SEM INPUT DE TEXTO) ---
 const btnConnectToken = document.querySelector('.btn-deriv') || document.getElementById('btn-connect-token');
 
 if (btnConnectToken) {
-    // Muda o texto do botão para refletir o login automático
     btnConnectToken.innerText = "Conectar com Conta Deriv (1 Clique)";
     
     btnConnectToken.onclick = (e) => {
         e.preventDefault();
-        // Redireciona para a página oficial de autorização da Deriv voltando para o seu site
         const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
-        window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${MEU_APP_ID}&l=pt&brand=deriv`;
+        // Redireciona para o login oficial da Deriv usando o app_id numérico compatível
+        window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${MEU_APP_ID}&l=pt&brand=deriv&redirect_uri=${redirectUri}`;
     };
 }
 
-// Captura automática do token caso a Deriv redirecione de volta para o seu site com o token na URL
+// Captura automática do token retornado pela Deriv na URL
 function capturarRetornoOAuth() {
     const hash = window.location.hash;
     if (hash && hash.includes('token1=')) {
         const params = new URLSearchParams(hash.replace('#', '?'));
-        const token = params.get('token1'); // Pega o token da primeira conta
-        
-        if (token) {
-            localStorage.setItem('deriv_token', token);
-            // Limpa a URL para sumir com o token da barra de endereço
-            window.history.replaceState({}, document.title, window.location.pathname);
+        // Pega o token da conta principal retornada
+        for (let [key, value] of params.entries()) {
+            if (key.startsWith('token1')) {
+                tokenDeriv = value;
+                localStorage.setItem('deriv_token', value);
+                break;
+            }
         }
+        // Limpa os tokens da barra de endereços por segurança
+        window.history.replaceState({}, document.title, window.location.pathname);
     }
 }
 
@@ -113,9 +115,14 @@ if (btnStartBot) {
             metaLossVirtual: parseInt(document.getElementById('meta-loss-virtual')?.value || 4),
             maxMartingale: parseInt(document.getElementById('max-martingale')?.value || 10),
             fatorMultiplicador: parseFloat(document.getElementById('fator-multiplicador')?.value || 1.8),
-            stopWin: parseFloat(document.getElementById('stop-win')?.value || 10000),
-            stopLoss: parseFloat(document.getElementById('stop-loss')?.value || 10000)
+            stopWin: parseFloat(document.getElementById('stop-win')?.value || 50),
+            stopLoss: parseFloat(document.getElementById('stop-loss')?.value || 50)
         };
+
+        if (!tokenDeriv) {
+            alert("Conecte sua conta Deriv primeiro clicando no botão superior!");
+            return;
+        }
 
         btnStartBot.disabled = true;
         if (btnStopBot) btnStopBot.disabled = false;
@@ -142,7 +149,7 @@ function pararRoboUI() {
     botLogs.innerHTML += `> ⏹️ Robô parado pelo usuário.<br>`;
 }
 
-// ==================== MOTOR DO ROBÔ (TRADUÇÃO FIEL DO XML 4X4) ====================
+// ==================== MOTOR DO ROBÔ (4X4) ====================
 function iniciarMotor(tipoRobo, config) {
     wsBot = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${MEU_APP_ID}`);
 
@@ -154,7 +161,7 @@ function iniciarMotor(tipoRobo, config) {
     let passoAlternancia = 0;
 
     wsBot.onopen = () => {
-        botLogs.innerHTML += `> 🔌 WebSocket aberto. Autenticando com token automático...<br>";`;
+        botLogs.innerHTML += `> 🔌 WebSocket conectado. Autorizando conta...<br>`;
         wsBot.send(JSON.stringify({ authorize: tokenDeriv }));
     };
 
@@ -162,7 +169,7 @@ function iniciarMotor(tipoRobo, config) {
         const data = JSON.parse(msg.data);
 
         if (data.msg_type === 'authorize') {
-            botLogs.innerHTML += `> 🔓 Autorizado com sucesso! Assinando ticks do 1HZ100V...<br>`;
+            botLogs.innerHTML += `> 🔓 Conta autorizada com sucesso! Assinando ticks do 1HZ100V...<br>`;
             wsBot.send(JSON.stringify({ ticks: "1HZ100V", subscribe: 1 }));
         }
 
@@ -271,11 +278,13 @@ function enviarOrdem(tipoContrato, stake) {
 // Inicialização automática ao carregar a página
 window.onload = () => {
     verificarSessao();
-    capturarRetornoOAuth();
+    capturartorRetornoOAuth = capturarRetornoOAuth();
 
-    tokenDeriv = localStorage.getItem('deriv_token');
-    if (tokenDeriv) {
+    const tokenSalvo = localStorage.getItem('deriv_token');
+    if (tokenSalvo) {
+        tokenDeriv = tokenSalvo;
         if (btnStartBot) btnStartBot.disabled = false;
-        botLogs.innerHTML += `> ✅ Conta Deriv conectada automaticamente com sucesso!<br>`;
+        if (botLogs) botLogs.innerHTML += `> ✅ Conta Deriv conectada com sucesso!<br>`;
     }
 };
+                                                       
