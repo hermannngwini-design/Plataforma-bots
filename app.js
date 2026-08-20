@@ -7,32 +7,29 @@ function log(mensagem) {
     logsDiv.scrollTop = logsDiv.scrollHeight;
 }
 
-// 1. Redireciona para a página oficial de login da Deriv OAuth
+// 1. Redirecionamento correto usando o OAuth da Deriv (Binary)
 function conectarOAuthDeriv() {
-    const appId = "34aspGUGPyiOkGCgGtkUw"; // Substitua pelo seu App ID da Deriv se necessário
-    const redirectUrl = encodeURIComponent(window.location.origin + window.location.pathname);
-    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&l=pt&brand=deriv`;
+    const appId = "34aspGUGPyiOkGCgGtkUw"; 
+    const redirectUrl = window.location.origin + window.location.pathname;
+    window.location.href = `https://oauth.binary.com/oauth2/authorize?app_id=${appId}&l=pt`;
 }
 
-// 2. Captura o token da URL quando a Deriv redireciona de volta para o seu site
+// 2. Captura do token de retorno da Deriv na URL
 window.onload = () => {
     const params = new URLSearchParams(window.location.search);
     
-    // Tenta capturar o token da primeira conta retornada pelo OAuth da Deriv
-    for (let [key, value] of params.entries()) {
-        if (key.startsWith('token1')) {
-            tokenDeriv = value;
-            break;
-        }
-    }
-
-    if (!tokenDeriv) {
-        // Tenta buscar do localStorage se já estava conectado antes
+    // Procura o token1 retornado na URL pela Deriv
+    if (params.has('token1')) {
+        tokenDeriv = params.get('token1');
+        localStorage.setItem('deriv_token', tokenDeriv);
+        
+        // Limpa a URL para sumir com os tokens por segurança
+        window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
         tokenDeriv = localStorage.getItem('deriv_token');
     }
 
     if (tokenDeriv) {
-        localStorage.setItem('deriv_token', tokenDeriv);
         validarTokenSalvo(tokenDeriv);
     }
 };
@@ -49,7 +46,7 @@ function validarTokenSalvo(token) {
         const data = JSON.parse(msg.data);
         if (data.msg_type === 'authorize') {
             log(`✅ Conectado com sucesso!`);
-            document.getElementById('user-account').innerText = `${data.authorize.email} (${data.authorize.currency})`;
+            document.getElementById('user-account').innerText = `${data.authorize.email} (${data.authorize.currency}) [${data.authorize.loginid}]`;
             document.getElementById('user-info').style.display = 'block';
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('btn-start-bot').disabled = false;
@@ -66,7 +63,6 @@ function validarTokenSalvo(token) {
 document.getElementById('btn-start-bot').addEventListener('click', () => {
     const tipoRobo = document.getElementById('select-robo').value;
     
-    // Captura dinâmica dos inputs que você pediu
     const config = {
         stakeInicial: parseFloat(document.getElementById('stake-inicial').value),
         metaLossVirtual: parseInt(document.getElementById('meta-loss-virtual').value),
@@ -112,7 +108,7 @@ function iniciarMotor(tipoRobo, config) {
 
     wsBot.onopen = () => {
         wsBot.send(JSON.stringify({ authorize: tokenDeriv }));
-        wsBot.send(JSON.stringify({ ticks: "1HZ100V" })); // Volatility 100 Index
+        wsBot.send(JSON.stringify({ ticks: "1HZ100V" }));
     };
 
     wsBot.onmessage = (msg) => {
@@ -149,7 +145,7 @@ function iniciarMotor(tipoRobo, config) {
                 }
 
                 if (tipoRobo === 'robo_4x4') {
-                    stakeAtual = processarResultado4x4(contrato, estado4x4, config);
+                    stakeAtual = processarResultado4x4(contrato, estado4x4, config, stakeAtual);
                 }
             }
         }
@@ -177,7 +173,7 @@ function executarLogicaRobo4x4(preco, stake, estado, config) {
     }
 }
 
-function processarResultado4x4(contrato, estado, config) {
+function processarResultado4x4(contrato, estado, config, stakeAtualFeito) {
     if (contrato.status === 'won') {
         estado.contadorMg = 0;
         estado.contadorLossVirtual = 0;
@@ -186,7 +182,7 @@ function processarResultado4x4(contrato, estado, config) {
         return config.stakeInicial;
     } else {
         if (estado.contadorMg < config.maxMartingale) {
-            let novoStake = Number((estado.stakeAtual * config.fatorMultiplicador).toFixed(2));
+            let novoStake = Number((stakeAtualFeito * config.fatorMultiplicador).toFixed(2));
             estado.contadorMg++;
             estado.emModoReal = true;
             log(`🔄 Martingale (${estado.contadorMg}/${config.maxMartingale}). Novo Stake: $${novoStake}`);
