@@ -7,36 +7,35 @@ function log(mensagem) {
     logsDiv.scrollTop = logsDiv.scrollHeight;
 }
 
-// 1. Redirecionamento correto usando o OAuth da Deriv (Binary)
-function conectarOAuthDeriv() {
-    const appId = "34aspGUGPyiOkGCgGtkUw"; 
-    const redirectUrl = window.location.origin + window.location.pathname;
-    window.location.href = `https://oauth.binary.com/oauth2/authorize?app_id=${appId}&l=pt`;
-}
-
-// 2. Captura do token de retorno da Deriv na URL
+// Verifica se já existe um token salvo no navegador ao abrir a página
 window.onload = () => {
-    const params = new URLSearchParams(window.location.search);
-    
-    // Procura o token1 retornado na URL pela Deriv
-    if (params.has('token1')) {
-        tokenDeriv = params.get('token1');
-        localStorage.setItem('deriv_token', tokenDeriv);
-        
-        // Limpa a URL para sumir com os tokens por segurança
-        window.history.replaceState({}, document.title, window.location.pathname);
-    } else {
-        tokenDeriv = localStorage.getItem('deriv_token');
-    }
-
-    if (tokenDeriv) {
-        validarTokenSalvo(tokenDeriv);
+    const tokenSalvo = localStorage.getItem('deriv_token');
+    if (tokenSalvo) {
+        document.getElementById('input-token').value = tokenSalvo;
+        tokenDeriv = tokenSalvo;
+        validarTokenSalvo(tokenSalvo);
     }
 };
 
+function conectarComToken() {
+    const tokenInput = document.getElementById('input-token').value.trim();
+    if (!tokenInput) {
+        alert("Por favor, insira o token da sua conta Deriv.");
+        return;
+    }
+    tokenDeriv = tokenInput;
+    localStorage.setItem('deriv_token', tokenDeriv);
+    validarTokenSalvo(tokenDeriv);
+}
+
+function desconectar() {
+    localStorage.removeItem('deriv_token');
+    location.reload();
+}
+
 function validarTokenSalvo(token) {
-    log("🔄 Validando sessão na Deriv...");
-    const tempWs = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=34aspGUGPyiOkGCgGtkUw`);
+    log("🔄 Validando token na Deriv...");
+    const tempWs = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=1089`);
     
     tempWs.onopen = () => {
         tempWs.send(JSON.stringify({ authorize: token }));
@@ -46,13 +45,13 @@ function validarTokenSalvo(token) {
         const data = JSON.parse(msg.data);
         if (data.msg_type === 'authorize') {
             log(`✅ Conectado com sucesso!`);
-            document.getElementById('user-account').innerText = `${data.authorize.email} (${data.authorize.currency}) [${data.authorize.loginid}]`;
+            document.getElementById('user-account').innerText = `${data.authorize.email} (${data.authorize.currency})`;
             document.getElementById('user-info').style.display = 'block';
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('btn-start-bot').disabled = false;
             tempWs.close();
         } else if (data.error) {
-            log(`❌ Sessão expirada ou inválida. Conecte novamente.`);
+            log(`❌ Erro: ${data.error.message}`);
             localStorage.removeItem('deriv_token');
             tempWs.close();
         }
@@ -94,7 +93,7 @@ function pararRoboUI() {
 
 // ==================== MOTOR DO ROBÔ (4X4) ====================
 function iniciarMotor(tipoRobo, config) {
-    wsBot = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=34aspGUGPyiOkGCgGtkUw`);
+    wsBot = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=1089`);
 
     let lucroTotal = 0;
     let stakeAtual = config.stakeInicial;
@@ -196,6 +195,8 @@ function processarResultado4x4(contrato, estado, config, stakeAtualFeito) {
         }
     }
 }
+
+function enviarOrdess(tipoContrato, stake) {} // Mantido para compatibilidade interna
 
 function enviarOrdem(tipoContrato, stake) {
     log(`🛒 Enviando ordem (${tipoContrato}) com stake $${stake}...`);
