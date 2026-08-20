@@ -16,8 +16,8 @@ const selectRobo = document.getElementById('select-robo');
 let wsBot = null;
 let tokenDeriv = "";
 
-// App ID numérico oficial da Deriv compatível com OAuth de redirecionamento
-const MEU_APP_ID = "1089";
+// App ID padrão da Deriv para autorização web via OAuth
+const DERIV_APP_ID = "1089";
 
 // --- CONTROLE DE USUÁRIOS LOCAL (LOGIN / CADASTRO) ---
 if (btnRegister) {
@@ -73,20 +73,22 @@ function verificarSessao() {
     }
 }
 
-// --- REDIRECIONAMENTO OAUTH 1 CLIQUE ---
+// --- LOGIN OFICIAL DERIV (REDIRECIONAMENTO AUTOMÁTICO) ---
 const btnConnectToken = document.querySelector('.btn-deriv') || document.getElementById('btn-connect-token');
 
 if (btnConnectToken) {
-    btnConnectToken.innerText = "Conectar com Conta Deriv (1 Clique)";
+    btnConnectToken.innerText = "Entrar com a sua Conta Deriv";
     
     btnConnectToken.onclick = (e) => {
         e.preventDefault();
+        // Pega a URL atual limpa para a Deriv redirecionar de volta após o login
         const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
-        window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${MEU_APP_ID}&l=pt&brand=deriv&redirect_uri=${redirectUri}`;
+        // Redireciona para o painel de login oficial da Deriv
+        window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${DERIV_APP_ID}&l=pt&brand=deriv&redirect_uri=${redirectUri}`;
     };
 }
 
-// Captura automática do token retornado pela Deriv na URL após o login
+// Captura automática do token quando a Deriv devolve o usuário para o site
 function capturarRetornoOAuth() {
     const hash = window.location.hash;
     if (hash && hash.includes('token1=')) {
@@ -98,6 +100,7 @@ function capturarRetornoOAuth() {
                 break;
             }
         }
+        // Limpa o token da barra de endereços do navegador por segurança
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 }
@@ -117,7 +120,7 @@ if (btnStartBot) {
         };
 
         if (!tokenDeriv) {
-            alert("Por favor, clique em 'Conectar com Conta Deriv (1 Clique)' primeiro!");
+            alert("Faça login na sua conta Deriv clicando no botão 'Entrar com a sua Conta Deriv' primeiro!");
             return;
         }
 
@@ -148,7 +151,7 @@ function pararRoboUI() {
 
 // ==================== MOTOR DO ROBÔ (4X4) ====================
 function iniciarMotor(tipoRobo, config) {
-    wsBot = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${MEU_APP_ID}`);
+    wsBot = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${DERIV_APP_ID}`);
 
     let lucroTotal = 0;
     let stakeAtual = config.stakeInicial;
@@ -158,7 +161,7 @@ function iniciarMotor(tipoRobo, config) {
     let passoAlternancia = 0;
 
     wsBot.onopen = () => {
-        botLogs.innerHTML += `> 🔌 WebSocket conectado. Autorizando conta...<br>`;
+        botLogs.innerHTML += `> 🔌 WebSocket conectado. Autorizando...<br>`;
         wsBot.send(JSON.stringify({ authorize: tokenDeriv }));
     };
 
@@ -280,6 +283,6 @@ window.onload = () => {
     const tokenSalvo = localStorage.getItem('deriv_token');
     if (tokenSalvo) {
         tokenDeriv = tokenSalvo;
-        if (botLogs) botLogs.innerHTML += `> ✅ Conta Deriv conectada com sucesso!<br>`;
+        if (botLogs) botLogs.innerHTML += `> ✅ Conta Deriv conectada e pronta para operar!<br>`;
     }
 };
