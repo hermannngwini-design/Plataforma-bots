@@ -1,40 +1,84 @@
+// Elementos da Interface
+const authContainer = document.getElementById('auth-container');
+const dashboardContainer = document.getElementById('dashboard-container');
+const emailInput = document.getElementById('email');
+const passwordInput = document.getElementById('password');
+const btnLogin = document.getElementById('btn-login');
+const btnRegister = document.getElementById('btn-register');
+const btnLogout = document.getElementById('btn-logout');
+const userLoggedSpan = document.getElementById('user-logged');
+
+const inputToken = document.getElementById('input-token');
+const btnConnectToken = document.getElementById('btn-connect-token');
+const derivStatus = document.getElementById('deriv-status');
+const botLogs = document.getElementById('bot-logs');
+const btnStartBot = document.getElementById('btn-start-bot');
+const btnStopBot = document.getElementById('btn-stop-bot');
+const selectRobo = document.getElementById('select-robo');
+
 let wsBot = null;
 let tokenDeriv = "";
-const logsDiv = document.getElementById('bot-logs');
 
-function log(mensagem) {
-    logsDiv.innerHTML += `> ${mensagem}<br>`;
-    logsDiv.scrollTop = logsDiv.scrollHeight;
+// --- CONTROLE DE USUÁRIOS LOCAL (LOGIN / CADASTRO) ---
+if (btnRegister) {
+    btnRegister.addEventListener('click', () => {
+        const email = emailInput.value.trim();
+        const password = passwordInput.value.trim();
+        
+        if(!email || !password) return alert("Preencha todos os campos!");
+        if(password.length < 6) return alert("A senha deve ter pelo menos 6 caracteres.");
+
+        localStorage.setItem("user_email", email);
+        localStorage.setItem("user_pass", password);
+        localStorage.setItem("user_session", email);
+        
+        alert("Conta criada com sucesso!");
+        verificarSessao();
+    });
 }
 
-// Verifica se já existe um token salvo no navegador ao abrir a página
-window.onload = () => {
-    const tokenSalvo = localStorage.getItem('deriv_token');
-    if (tokenSalvo) {
-        document.getElementById('input-token').value = tokenSalvo;
-        tokenDeriv = tokenSalvo;
-        validarTokenSalvo(tokenSalvo);
+if (btnLogin) {
+    btnLogin.addEventListener('click', () => {
+        const email = emailInput.value.trim();
+        const password = passwordInput.value.trim();
+        const savedEmail = localStorage.getItem("user_email");
+        const savedPass = localStorage.getItem("user_pass");
+
+        if (email === savedEmail && password === savedPass && email !== null) {
+            localStorage.setItem("user_session", email);
+            verificarSessao();
+        } else {
+            alert("Usuário não encontrado ou senha incorreta!");
+        }
+    });
+}
+
+if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
+        localStorage.removeItem("user_session");
+        verificarSessao();
+    });
+}
+
+function verificarSessao() {
+    const session = localStorage.getItem("user_session");
+    if (session) {
+        if(authContainer) authContainer.classList.add('hidden');
+        if(dashboardContainer) dashboardContainer.classList.remove('hidden');
+        if(userLoggedSpan) userLoggedSpan.innerText = session;
+    } else {
+        if(authContainer) authContainer.classList.remove('hidden');
+        if(dashboardContainer) dashboardContainer.classList.add('hidden');
     }
-};
-
-function conectarComToken() {
-    const tokenInput = document.getElementById('input-token').value.trim();
-    if (!tokenInput) {
-        alert("Por favor, insira o token da sua conta Deriv.");
-        return;
-    }
-    tokenDeriv = tokenInput;
-    localStorage.setItem('deriv_token', tokenDeriv);
-    validarTokenSalvo(tokenDeriv);
 }
 
-function desconectar() {
-    localStorage.removeItem('deriv_token');
-    location.reload();
-}
+// --- CONEXÃO COM A DERIV VIA TOKEN ---
+function conectarComToken(token) {
+    if (!token) return alert("Insira o token!");
+    tokenDeriv = token;
+    localStorage.setItem('deriv_token', token);
 
-function validarTokenSalvo(token) {
-    log("🔄 Validando token na Deriv...");
+    botLogs.innerHTML += "🔄 Validando token na Deriv...<br>";
     const tempWs = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=1089`);
     
     tempWs.onopen = () => {
@@ -44,54 +88,69 @@ function validarTokenSalvo(token) {
     tempWs.onmessage = (msg) => {
         const data = JSON.parse(msg.data);
         if (data.msg_type === 'authorize') {
-            log(`✅ Conectado com sucesso!`);
-            document.getElementById('user-account').innerText = `${data.authorize.email} (${data.authorize.currency})`;
-            document.getElementById('user-info').style.display = 'block';
-            document.getElementById('auth-section').style.display = 'none';
-            document.getElementById('btn-start-bot').disabled = false;
+            if (derivStatus) {
+                derivStatus.innerText = `Status: Conectado (${data.authorize.email})`;
+                derivStatus.className = "status-online";
+            }
+            botLogs.innerHTML += `✅ Conectado com sucesso à Deriv!<br>`;
+            if (btnStartBot) btnStartBot.disabled = false;
             tempWs.close();
         } else if (data.error) {
-            log(`❌ Erro: ${data.error.message}`);
+            botLogs.innerHTML += `❌ Erro de autenticação: ${data.error.message}<br>`;
             localStorage.removeItem('deriv_token');
             tempWs.close();
         }
     };
 }
 
-// Controles de Início e Parada do Robô
-document.getElementById('btn-start-bot').addEventListener('click', () => {
-    const tipoRobo = document.getElementById('select-robo').value;
-    
-    const config = {
-        stakeInicial: parseFloat(document.getElementById('stake-inicial').value),
-        metaLossVirtual: parseInt(document.getElementById('meta-loss-virtual').value),
-        maxMartingale: parseInt(document.getElementById('max-martingale').value),
-        fatorMultiplicador: parseFloat(document.getElementById('fator-multiplicador').value),
-        stopWin: parseFloat(document.getElementById('stop-win').value),
-        stopLoss: parseFloat(document.getElementById('stop-loss').value)
-    };
-
-    document.getElementById('btn-start-bot').disabled = true;
-    document.getElementById('btn-stop-bot').disabled = false;
-    document.getElementById('select-robo').disabled = true;
-
-    log(`🚀 Iniciando ${tipoRobo}...`);
-    iniciarMotor(tipoRobo, config);
-});
-
-document.getElementById('btn-stop-bot').addEventListener('click', () => {
-    if (wsBot) wsBot.close();
-    pararRoboUI();
-});
-
-function pararRoboUI() {
-    document.getElementById('btn-start-bot').disabled = false;
-    document.getElementById('btn-stop-bot').disabled = true;
-    document.getElementById('select-robo').disabled = false;
-    log("⏹️ Robô parado pelo usuário.");
+if (btnConnectToken) {
+    btnConnectToken.addEventListener('click', () => {
+        const tokenInput = inputToken ? inputToken.value.trim() : "";
+        conectarComToken(tokenInput);
+    });
 }
 
-// ==================== MOTOR DO ROBÔ (4X4) ====================
+// --- CONTROLE DE EXECUÇÃO DO ROBÔ ---
+if (btnStartBot) {
+    btnStartBot.addEventListener('click', () => {
+        const tipoRobo = selectRobo ? selectRobo.value : 'robo_4x4';
+        
+        // Captura os parâmetros ajustados na interface
+        const config = {
+            stakeInicial: parseFloat(document.getElementById('stake-inicial')?.value || 0.35),
+            metaLossVirtual: parseInt(document.getElementById('meta-loss-virtual')?.value || 4),
+            maxMartingale: parseInt(document.getElementById('max-martingale')?.value || 10),
+            fatorMultiplicador: parseFloat(document.getElementById('fator-multiplicador')?.value || 1.8),
+            stopWin: parseFloat(document.getElementById('stop-win')?.value || 50),
+            stopLoss: parseFloat(document.getElementById('stop-loss')?.value || 50)
+        };
+
+        btnStartBot.disabled = true;
+        if (btnStopBot) btnStopBot.disabled = false;
+        if (selectRobo) selectRobo.disabled = true;
+
+        botLogs.innerHTML += `> 🚀 Iniciando ${tipoRobo}...<br>`;
+        iniciarMotor(tipoRobo, config);
+    });
+}
+
+if (btnStopBot) {
+    btnStopBot.addEventListener('click', () => {
+        if (wsBot) {
+            wsBot.close();
+        }
+        pararRoboUI();
+    });
+}
+
+function pararRoboUI() {
+    if (btnStartBot) btnStartBot.disabled = false;
+    if (btnStopBot) btnStopBot.disabled = true;
+    if (selectRobo) selectRobo.disabled = false;
+    botLogs.innerHTML += `> ⏹️ Robô parado pelo usuário.<br>`;
+}
+
+// --- MOTOR DO ROBÔ (4X4 COM FILTRO VIRTUAL E MARTINGALE) ---
 function iniciarMotor(tipoRobo, config) {
     wsBot = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=1089`);
 
@@ -107,7 +166,7 @@ function iniciarMotor(tipoRobo, config) {
 
     wsBot.onopen = () => {
         wsBot.send(JSON.stringify({ authorize: tokenDeriv }));
-        wsBot.send(JSON.stringify({ ticks: "1HZ100V" }));
+        wsBot.send(JSON.stringify({ ticks: "1HZ100V" })); // Volatility 100 Index
     };
 
     wsBot.onmessage = (msg) => {
@@ -128,16 +187,16 @@ function iniciarMotor(tipoRobo, config) {
             const contrato = data.proposal_open_contract;
             if (contrato && contrato.is_sold) {
                 lucroTotal += contrato.profit;
-                log(`📊 Resultado: ${contrato.status.toUpperCase()} | Lucro Rodada: $${contrato.profit.toFixed(2)} | Acumulado: $${lucroTotal.toFixed(2)}`);
+                botLogs.innerHTML += `> 📊 Resultado: ${contrato.status.toUpperCase()} | Lucro Rodada: $${contrato.profit.toFixed(2)} | Acumulado: $${lucroTotal.toFixed(2)}<br>`;
 
                 if (lucroTotal >= config.stopWin) {
-                    log(`🏆 Stop Win atingido! Parando robô.`);
+                    botLogs.innerHTML += `> 🏆 Stop Win atingido! Parando robô.<br>`;
                     wsBot.close();
                     pararRoboUI();
                     return;
                 }
                 if (lucroTotal <= -config.stopLoss) {
-                    log(`🛑 Stop Loss atingido! Parando robô.`);
+                    botLogs.innerHTML += `> 🛑 Stop Loss atingido! Parando robô.<br>`;
                     wsBot.close();
                     pararRoboUI();
                     return;
@@ -160,11 +219,11 @@ function executarLogicaRobo4x4(preco, stake, estado, config) {
         
         if (condicaoVirtual) {
             estado.contadorLossVirtual++;
-            log(`⚠️ Loss virtual detectado (Dígito: ${ultimoDigito}). Contador: ${estado.contadorLossVirtual}/${config.metaLossVirtual}`);
+            botLogs.innerHTML += `> ⚠️ Loss virtual (Dígito: ${ultimoDigito}). Contador: ${estado.contadorLossVirtual}/${config.metaLossVirtual}<br>`;
             
             if (estado.contadorLossVirtual >= config.metaLossVirtual) {
                 estado.emModoReal = true;
-                log(`🎯 Meta virtual atingida. Entrando em modo real!`);
+                botLogs.innerHTML += `> 🎯 Meta virtual atingida. Entrando em modo real!<br>`;
                 enviarOrdem(estado.passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN", stake);
             }
         }
@@ -177,18 +236,18 @@ function processarResultado4x4(contrato, estado, config, stakeAtualFeito) {
         estado.contadorMg = 0;
         estado.contadorLossVirtual = 0;
         estado.emModoReal = false;
-        log(`✅ Win! Retornando ao stake inicial: $${config.stakeInicial}`);
+        botLogs.innerHTML += `> ✅ Win! Retornando ao stake inicial: $${config.stakeInicial}<br>`;
         return config.stakeInicial;
     } else {
         if (estado.contadorMg < config.maxMartingale) {
             let novoStake = Number((stakeAtualFeito * config.fatorMultiplicador).toFixed(2));
             estado.contadorMg++;
             estado.emModoReal = true;
-            log(`🔄 Martingale (${estado.contadorMg}/${config.maxMartingale}). Novo Stake: $${novoStake}`);
+            botLogs.innerHTML += `> 🔄 Martingale (${estado.contadorMg}/${config.maxMartingale}). Novo Stake: $${novoStake}<br>`;
             enviarOrdem(estado.passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN", novoStake);
             return novoStake;
         } else {
-            log(`❌ Limite máximo de Martingale atingido. Robô parado por segurança.`);
+            botLogs.innerHTML += `> ❌ Limite máximo de Martingale atingido. Robô parado por segurança.<br>`;
             wsBot.close();
             pararRoboUI();
             return config.stakeInicial;
@@ -196,10 +255,8 @@ function processarResultado4x4(contrato, estado, config, stakeAtualFeito) {
     }
 }
 
-function enviarOrdess(tipoContrato, stake) {} // Mantido para compatibilidade interna
-
 function enviarOrdem(tipoContrato, stake) {
-    log(`🛒 Enviando ordem (${tipoContrato}) com stake $${stake}...`);
+    botLogs.innerHTML += `> 🛒 Enviando ordem (${tipoContrato}) com stake $${stake}...<br>`;
     wsBot.send(JSON.stringify({
         buy: 1,
         price: stake,
@@ -214,3 +271,13 @@ function enviarOrdem(tipoContrato, stake) {
         }
     }));
 }
+
+// Inicialização automática ao carregar a página
+window.onload = () => {
+    verificarSessao();
+    const tokenSalvo = localStorage.getItem('deriv_token');
+    if (tokenSalvo) {
+        if (inputToken) inputToken.value = tokenSalvo;
+        conectarComToken(tokenSalvo);
+    }
+};
