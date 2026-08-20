@@ -1,6 +1,13 @@
 // Elementos da Interface
 const authContainer = document.getElementById('auth-container');
 const dashboardContainer = document.getElementById('dashboard-container');
+const emailInput = document.getElementById('email');
+const passwordInput = document.getElementById('password');
+const btnLogin = document.getElementById('btn-login');
+const btnRegister = document.getElementById('btn-register');
+const btnLogout = document.getElementById('btn-logout');
+const userLoggedSpan = document.getElementById('user-logged');
+
 const btnConnectDeriv = document.getElementById('btn-connect-deriv');
 const derivStatus = document.getElementById('deriv-status');
 const botLogs = document.getElementById('bot-logs');
@@ -10,20 +17,54 @@ const btnStartBot = document.getElementById('btn-start-bot');
 const APP_ID = "34aspGUGPyiOkGCgGtkUw"; 
 const LOGIN_URL = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}&l=pt&brand=deriv`;
 
-// --- CONTROLE DE SESSÃO ---
+// --- CONTROLE DE USUÁRIOS LOCAL (LOGIN / CADASTRO) ---
+btnRegister.addEventListener('click', () => {
+    const email = emailInput.value.trim();
+    const password = passwordInput.value.trim();
+    
+    if(!email || !password) return alert("Preencha todos os campos!");
+    if(password.length < 6) return alert("A senha deve ter pelo menos 6 caracteres.");
+
+    localStorage.setItem("user_email", email);
+    localStorage.setItem("user_pass", password);
+    localStorage.setItem("user_session", email);
+    
+    alert("Conta criada com sucesso!");
+    verificarSessao();
+});
+
+btnLogin.addEventListener('click', () => {
+    const email = emailInput.value.trim();
+    const password = passwordInput.value.trim();
+    const savedEmail = localStorage.getItem("user_email");
+    const savedPass = localStorage.getItem("user_pass");
+
+    if (email === savedEmail && password === savedPass && email !== null) {
+        localStorage.setItem("user_session", email);
+        verificarSessao();
+    } else {
+        alert("Usuário não encontrado ou senha incorreta!");
+    }
+});
+
+btnLogout.addEventListener('click', () => {
+    localStorage.removeItem("user_session");
+    verificarSessao();
+});
+
 function verificarSessao() {
     const session = localStorage.getItem("user_session");
     if (session) {
         authContainer.classList.add('hidden');
         dashboardContainer.classList.remove('hidden');
-        document.getElementById('user-logged').innerText = session;
+        userLoggedSpan.innerText = session;
     } else {
         authContainer.classList.remove('hidden');
         dashboardContainer.classList.add('hidden');
     }
 }
 
-// --- FLUXO OAUTH ---
+// --- FLUXO OAUTH DA DERIV ---
 btnConnectDeriv.addEventListener('click', () => {
     window.location.href = LOGIN_URL;
 });
@@ -55,6 +96,7 @@ async function processarConexao(token) {
             derivStatus.className = "status-online";
             botLogs.innerHTML = `✅ Conectado: ${response.authorize.email}<br>💰 Saldo: ${response.authorize.currency} ${response.authorize.balance}`;
             btnStartBot.disabled = false;
+            btnConnectDeriv.innerText = "Conta Vinculada";
         } else {
             botLogs.innerHTML = `❌ Erro: ${response.error.message}`;
             btnConnectDeriv.disabled = false;
@@ -63,12 +105,4 @@ async function processarConexao(token) {
         ws.close();
     };
 }
-
-// --- MANTENDO CONTROLE DE USUÁRIOS LOCAL ---
-const emailInput = document.getElementById('email');
-const passwordInput = document.getElementById('password');
-const btnLogin = document.getElementById('btnLogin'); // Certifique-se dos IDs no HTML
-const btnRegister = document.getElementById('btn-register');
-const btnLogout = document.getElementById('btn-logout');
-
-// (Mantenha aqui as suas funções originais de btnLogin, btnRegister e btnLogout que já funcionavam)
+          
