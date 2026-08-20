@@ -115,21 +115,20 @@ if (btnStartBot) {
     btnStartBot.addEventListener('click', () => {
         const tipoRobo = selectRobo ? selectRobo.value : 'robo_4x4';
         
-        // Captura os parâmetros ajustados na interface
         const config = {
             stakeInicial: parseFloat(document.getElementById('stake-inicial')?.value || 0.35),
             metaLossVirtual: parseInt(document.getElementById('meta-loss-virtual')?.value || 4),
             maxMartingale: parseInt(document.getElementById('max-martingale')?.value || 10),
             fatorMultiplicador: parseFloat(document.getElementById('fator-multiplicador')?.value || 1.8),
-            stopWin: parseFloat(document.getElementById('stop-win')?.value || 50),
-            stopLoss: parseFloat(document.getElementById('stop-loss')?.value || 50)
+            stopWin: parseFloat(document.getElementById('stop-win')?.value || 10000),
+            stopLoss: parseFloat(document.getElementById('stop-loss')?.value || 10000)
         };
 
         btnStartBot.disabled = true;
         if (btnStopBot) btnStopBot.disabled = false;
         if (selectRobo) selectRobo.disabled = true;
 
-        botLogs.innerHTML += `> 🚀 Iniciando ${tipoRobo}...<br>`;
+        botLogs.innerHTML += `> 🚀 Iniciando ${tipoRobo} (Ativo: Volatility 100 Index)...<br>`;
         iniciarMotor(tipoRobo, config);
     });
 }
@@ -150,113 +149,113 @@ function pararRoboUI() {
     botLogs.innerHTML += `> ⏹️ Robô parado pelo usuário.<br>`;
 }
 
-// --- MOTOR DO ROBÔ (4X4 COM FILTRO VIRTUAL E MARTINGALE) ---
+// ==================== MOTOR DO ROBÔ (TRADUÇÃO FIEL DO XML 4X4) ====================
 function iniciarMotor(tipoRobo, config) {
     wsBot = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=1089`);
 
-    let lucroTotal = 0;
     let stakeAtual = config.stakeInicial;
-
-    let estado4x4 = {
-        contadorLossVirtual: 0,
-        emModoReal: false,
-        passoAlternancia: 0,
-        contadorMg: 0
-    };
+    let contadorLossVirtual = 0;
+    let contadorMartingale = 0;
+    let emModoReal = false;
+    let passoAlternancia = 0;
 
     wsBot.onopen = () => {
+        botLogs.innerHTML += `> 🔌 WebSocket aberto. Autenticando...<br>`;
         wsBot.send(JSON.stringify({ authorize: tokenDeriv }));
-        wsBot.send(JSON.stringify({ ticks: "1HZ100V" })); // Volatility 100 Index
     };
 
     wsBot.onmessage = (msg) => {
         const data = JSON.parse(msg.data);
 
+        // Autorizado com sucesso, inicia a subscrição de ticks do Volatility 100 Index (1HZ100V)
+        if (data.msg_type === 'authorize') {
+            botLogs.innerHTML += `> 🔓 Autorizado. Assinando ticks do 1HZ100V...<br>`;
+            wsBot.send(JSON.stringify({ ticks: "1HZ100V", subscribe: 1 }));
+        }
+
+        // Leitura de Ticks (equivalente ao before_purchase do XML)
         if (data.msg_type === 'tick') {
             const preco = data.tick.quote;
+            const ultimoDigito = parseInt(preco.toString().slice(-1));
+            const ehPar = ultimoDigito % 2 === 0;
+
             if (tipoRobo === 'robo_4x4') {
-                executarLogicaRobo4x4(preco, stakeAtual, estado4x4, config);
+                if (emModoReal) {
+                    // Execução Real baseada no Passo de Alternância
+                    const tipoContrato = passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN";
+                    botLogs.innerHTML += `> 🎯 Modo Real Ativo | Executando compra (${tipoContrato}) | Stake: $${stakeAtual}<br>`;
+                    enviarOrdem(tipoContrato, stakeAtual);
+                } else {
+                    // Análise Virtual 4x4 idêntica ao XML
+                    botLogs.innerHTML += `> 🔍 Analisando tick: Preço ${preco} | Dígito: ${ultimoDigito} (${ehPar ? 'Par' : 'Ímpar'}) | Passo: ${passoAlternancia}<br>`;
+
+                    let condicaoVirtual = (passoAlternancia < 4 && ehPar) || (passoAlternancia >= 4 && !ehPar);
+
+                    if (condicaoVirtual) {
+                        contadorLossVirtual++;
+                        botLogs.innerHTML += `> ⚠️ Loss virtual (Alternância 4x4). Contador: ${contadorLossVirtual}/${config.metaLossVirtual}<br>`;
+
+                        if (contadorLossVirtual >= config.metaLossVirtual) {
+                            emModoReal = true;
+                            botLogs.innerHTML += `> 🚀 Meta de Loss Virtual atingida! Mudando para Modo Real...<br>`;
+                            const tipoContrato = passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN";
+                            enviarOrdem(tipoContrato, stakeAtual);
+                        }
+                    }
+                    // Avança o passo de alternância em looping de 0 a 7
+                    passoAlternancia = (passoAlternancia + 1) % 8;
+                }
             }
         }
 
+        // Confirmação de Compra de Contrato
         if (data.msg_type === 'buy') {
-            wsBot.send(JSON.stringify({ proposal_open_contract: 1, contract_id: data.buy.contract_id, subscribe: 1 }));
+            const contractId = data.buy.contract_id;
+            botLogs.innerHTML += `> 🛒 Contrato aceito. ID: ${contractId}. Aguardando resultado...<br>`;
+            wsBot.send(JSON.stringify({ proposal_open_contract: 1, contract_id: contractId, subscribe: 1 }));
         }
 
+        // Monitoramento e Pós-Compra (equivalente ao after_purchase do XML)
         if (data.msg_type === 'proposal_open_contract') {
             const contrato = data.proposal_open_contract;
             if (contrato && contrato.is_sold) {
-                lucroTotal += contrato.profit;
-                botLogs.innerHTML += `> 📊 Resultado: ${contrato.status.toUpperCase()} | Lucro Rodada: $${contrato.profit.toFixed(2)} | Acumulado: $${lucroTotal.toFixed(2)}<br>`;
+                const lucroRodada = contrato.profit;
+                botLogs.innerHTML += `> 📊 Resultado: ${contrato.status.toUpperCase()} | Lucro: $${lucroRodada.toFixed(2)}<br>`;
 
-                if (lucroTotal >= config.stopWin) {
-                    botLogs.innerHTML += `> 🏆 Stop Win atingido! Parando robô.<br>`;
-                    wsBot.close();
-                    pararRoboUI();
-                    return;
-                }
-                if (lucroTotal <= -config.stopLoss) {
-                    botLogs.innerHTML += `> 🛑 Stop Loss atingido! Parando robô.<br>`;
-                    wsBot.close();
-                    pararRoboUI();
-                    return;
+                // Checagem de Win/Loss do XML
+                if (contrato.status === 'won') {
+                    stakeAtual = config.stakeInicial;
+                    contadorMartingale = 0;
+                    contadorLossVirtual = 0;
+                    emModoReal = false;
+                    botLogs.innerHTML += `> ✅ Win! Resetando martingale e retornando ao stake inicial: $${config.stakeInicial}<br>`;
+                } else {
+                    // Tratamento de Loss e Martingale
+                    if (contadorMartingale < config.maxMartingale) {
+                        stakeAtual = Number((stakeAtual * config.fatorMultiplicador).toFixed(2));
+                        contadorMartingale++;
+                        emModoReal = true;
+                        botLogs.innerHTML += `> 🔄 Martingale (${contadorMartingale}/${config.maxMartingale}). Novo Stake: $${stakeAtual}<br>`;
+                    } else {
+                        botLogs.innerHTML += `> ❌ Limite máximo de Martingale atingido. Robô parado por segurança.<br>`;
+                        wsBot.close();
+                        pararRoboUI();
+                        return;
+                    }
                 }
 
-                if (tipoRobo === 'robo_4x4') {
-                    stakeAtual = processarResultado4x4(contrato, estado4x4, config, stakeAtual);
-                }
+                // Avança o passo de alternância pós-compra conforme o XML
+                passoAlternancia = (passoAlternancia + 1) % 8;
             }
+        }
+
+        if (data.error) {
+            botLogs.innerHTML += `> ❌ Erro da Deriv: ${data.error.message}<br>`;
         }
     };
 }
 
-function executarLogicaRobo4x4(preco, stake, estado, config) {
-    const ultimoDigito = parseInt(preco.toString().slice(-1));
-    const ehPar = ultimoDigito % 2 === 0;
-
-    if (!estado.emModoReal) {
-        let condicaoVirtual = (estado.passoAlternancia < 4 && ehPar) || (estado.passoAlternancia >= 4 && !ehPar);
-        
-        if (condicaoVirtual) {
-            estado.contadorLossVirtual++;
-            botLogs.innerHTML += `> ⚠️ Loss virtual (Dígito: ${ultimoDigito}). Contador: ${estado.contadorLossVirtual}/${config.metaLossVirtual}<br>`;
-            
-            if (estado.contadorLossVirtual >= config.metaLossVirtual) {
-                estado.emModoReal = true;
-                botLogs.innerHTML += `> 🎯 Meta virtual atingida. Entrando em modo real!<br>`;
-                enviarOrdem(estado.passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN", stake);
-            }
-        }
-        estado.passoAlternancia = (estado.passoAlternancia + 1) % 8;
-    }
-}
-
-function processarResultado4x4(contrato, estado, config, stakeAtualFeito) {
-    if (contrato.status === 'won') {
-        estado.contadorMg = 0;
-        estado.contadorLossVirtual = 0;
-        estado.emModoReal = false;
-        botLogs.innerHTML += `> ✅ Win! Retornando ao stake inicial: $${config.stakeInicial}<br>`;
-        return config.stakeInicial;
-    } else {
-        if (estado.contadorMg < config.maxMartingale) {
-            let novoStake = Number((stakeAtualFeito * config.fatorMultiplicador).toFixed(2));
-            estado.contadorMg++;
-            estado.emModoReal = true;
-            botLogs.innerHTML += `> 🔄 Martingale (${estado.contadorMg}/${config.maxMartingale}). Novo Stake: $${novoStake}<br>`;
-            enviarOrdem(estado.passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN", novoStake);
-            return novoStake;
-        } else {
-            botLogs.innerHTML += `> ❌ Limite máximo de Martingale atingido. Robô parado por segurança.<br>`;
-            wsBot.close();
-            pararRoboUI();
-            return config.stakeInicial;
-        }
-    }
-}
-
 function enviarOrdem(tipoContrato, stake) {
-    botLogs.innerHTML += `> 🛒 Enviando ordem (${tipoContrato}) com stake $${stake}...<br>`;
     wsBot.send(JSON.stringify({
         buy: 1,
         price: stake,
