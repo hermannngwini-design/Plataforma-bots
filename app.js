@@ -9,7 +9,6 @@ const btnLogout = document.getElementById('btn-logout');
 const userLoggedSpan = document.getElementById('user-logged');
 
 const inputToken = document.getElementById('input-token');
-const btnConnectToken = document.getElementById('btn-connect-token');
 const derivStatus = document.getElementById('deriv-status');
 const botLogs = document.getElementById('bot-logs');
 const btnStartBot = document.getElementById('btn-start-bot');
@@ -75,9 +74,25 @@ function verificarSessao() {
     }
 }
 
-// --- CONEXÃO COM A DERIV USANDO O SEU APP ID ---
+// --- CONEXÃO COM A DERIV USANDO O SEU APP ID (BOTÃO BLINDADO) ---
+const btnConnectToken = document.querySelector('.btn-deriv') || document.getElementById('btn-connect-token');
+
+if (btnConnectToken) {
+    btnConnectToken.onclick = (e) => {
+        e.preventDefault();
+        const inputElement = document.getElementById('input-token');
+        const tokenInput = inputElement ? inputElement.value.trim() : "";
+        
+        if (!tokenInput) {
+            alert("Por favor, insira o token!");
+            return;
+        }
+        conectarComToken(tokenInput);
+    };
+}
+
 function conectarComToken(token) {
-    if (!token) return alert("Insira o token!");
+    if (!token) return;
     tokenDeriv = token;
     localStorage.setItem('deriv_token', token);
 
@@ -91,11 +106,16 @@ function conectarComToken(token) {
     tempWs.onmessage = (msg) => {
         const data = JSON.parse(msg.data);
         if (data.msg_type === 'authorize') {
-            if (derivStatus) {
-                derivStatus.innerText = `Status: Conectado (${data.authorize.email})`;
-                derivStatus.className = "status-online";
-            }
-            botLogs.innerHTML += `✅ Conectado com sucesso à Deriv via Plataforma_Bots_Hermann!<br>`;
+            botLogs.innerHTML += `✅ Conectado com sucesso à Deriv (${data.authorize.email})!<br>`;
+            
+            const authSection = document.getElementById('auth-section');
+            const userInfo = document.getElementById('user-info');
+            const userAccount = document.getElementById('user-account');
+            
+            if (authSection) authSection.style.display = 'none';
+            if (userInfo) userInfo.style.display = 'block';
+            if (userAccount) userAccount.innerText = `${data.authorize.email} (${data.authorize.currency})`;
+            
             if (btnStartBot) btnStartBot.disabled = false;
             tempWs.close();
         } else if (data.error) {
@@ -104,13 +124,6 @@ function conectarComToken(token) {
             tempWs.close();
         }
     };
-}
-
-if (btnConnectToken) {
-    btnConnectToken.addEventListener('click', () => {
-        const tokenInput = inputToken ? inputToken.value.trim() : "";
-        conectarComToken(tokenInput);
-    });
 }
 
 // --- CONTROLE DE EXECUÇÃO DO ROBÔ ---
@@ -123,15 +136,15 @@ if (btnStartBot) {
             metaLossVirtual: parseInt(document.getElementById('meta-loss-virtual')?.value || 4),
             maxMartingale: parseInt(document.getElementById('max-martingale')?.value || 10),
             fatorMultiplicador: parseFloat(document.getElementById('fator-multiplicador')?.value || 1.8),
-            stopWin: parseFloat(document.getElementById('stop-win')?.value || 50),
-            stopLoss: parseFloat(document.getElementById('stop-loss')?.value || 50)
+            stopWin: parseFloat(document.getElementById('stop-win')?.value || 10000),
+            stopLoss: parseFloat(document.getElementById('stop-loss')?.value || 10000)
         };
 
         btnStartBot.disabled = true;
         if (btnStopBot) btnStopBot.disabled = false;
         if (selectRobo) selectRobo.disabled = true;
 
-        botLogs.innerHTML += `> 🚀 Iniciando ${tipoRobo} com o app ${MEU_APP_ID}...<br>`;
+        botLogs.innerHTML += `> 🚀 Iniciando ${tipoRobo} (Ativo: Volatility 100 Index)...<br>`;
         iniciarMotor(tipoRobo, config);
     });
 }
@@ -152,10 +165,11 @@ function pararRoboUI() {
     botLogs.innerHTML += `> ⏹️ Robô parado pelo usuário.<br>`;
 }
 
-// ==================== MOTOR DO ROBÔ (4X4) ====================
+// ==================== MOTOR DO ROBÔ (TRADUÇÃO FIEL DO XML 4X4) ====================
 function iniciarMotor(tipoRobo, config) {
     wsBot = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${MEU_APP_ID}`);
 
+    let lucroTotal = 0;
     let stakeAtual = config.stakeInicial;
     let contadorLossVirtual = 0;
     let contadorMartingale = 0;
@@ -163,18 +177,20 @@ function iniciarMotor(tipoRobo, config) {
     let passoAlternancia = 0;
 
     wsBot.onopen = () => {
-        botLogs.innerHTML += `> 🔌 WebSocket aberto com App ID próprio. Autenticando...<br>`;
+        botLogs.innerHTML += `> 🔌 WebSocket aberto. Autenticando...<br>`;
         wsBot.send(JSON.stringify({ authorize: tokenDeriv }));
     };
 
     wsBot.onmessage = (msg) => {
         const data = JSON.parse(msg.data);
 
+        // Autorizado com sucesso, inicia a subscrição de ticks do Volatility 100 Index (1HZ100V)
         if (data.msg_type === 'authorize') {
-            botLogs.innerHTML += `> 🔓 Autorizado! Assinando ticks do Volatility 100 Index (1HZ100V)...<br>`;
+            botLogs.innerHTML += `> 🔓 Autorizado. Assinando ticks do 1HZ100V...<br>`;
             wsBot.send(JSON.stringify({ ticks: "1HZ100V", subscribe: 1 }));
         }
 
+        // Leitura de Ticks (equivalente ao before_purchase do XML)
         if (data.msg_type === 'tick') {
             const preco = data.tick.quote;
             const ultimoDigito = parseInt(preco.toString().slice(-1));
@@ -188,6 +204,7 @@ function iniciarMotor(tipoRobo, config) {
                 } else {
                     botLogs.innerHTML += `> 🔍 Analisando tick: Preço ${preco} | Dígito: ${ultimoDigito} (${ehPar ? 'Par' : 'Ímpar'}) | Passo: ${passoAlternancia}<br>`;
 
+                    // Condição idêntica ao XML para somar loss virtual
                     let condicaoVirtual = (passoAlternancia < 4 && ehPar) || (passoAlternancia >= 4 && !ehPar);
 
                     if (condicaoVirtual) {
@@ -201,22 +218,37 @@ function iniciarMotor(tipoRobo, config) {
                             enviarOrdem(tipoContrato, stakeAtual);
                         }
                     }
-                    passoAlternancia = (passoAlternancia + 1) % 8;
                 }
             }
         }
 
+        // Confirmação de Compra de Contrato
         if (data.msg_type === 'buy') {
             const contractId = data.buy.contract_id;
             botLogs.innerHTML += `> 🛒 Contrato aceito. ID: ${contractId}. Aguardando resultado...<br>`;
             wsBot.send(JSON.stringify({ proposal_open_contract: 1, contract_id: contractId, subscribe: 1 }));
         }
 
+        // Monitoramento e Pós-Compra (equivalente ao after_purchase do XML)
         if (data.msg_type === 'proposal_open_contract') {
             const contrato = data.proposal_open_contract;
             if (contrato && contrato.is_sold) {
                 const lucroRodada = contrato.profit;
-                botLogs.innerHTML += `> 📊 Resultado: ${contrato.status.toUpperCase()} | Lucro: $${lucroRodada.toFixed(2)}<br>`;
+                lucroTotal += lucroRodada;
+                botLogs.innerHTML += `> 📊 Resultado: ${contrato.status.toUpperCase()} | Lucro Rodada: $${lucroRodada.toFixed(2)} | Acumulado: $${lucroTotal.toFixed(2)}<br>`;
+
+                if (lucroTotal >= config.stopWin) {
+                    botLogs.innerHTML += `> 🏆 Stop Win atingido! Parando robô.<br>`;
+                    wsBot.close();
+                    pararRoboUI();
+                    return;
+                }
+                if (lucroTotal <= -config.stopLoss) {
+                    botLogs.innerHTML += `> 🛑 Stop Loss atingido! Parando robô.<br>`;
+                    wsBot.close();
+                    pararRoboUI();
+                    return;
+                }
 
                 if (contrato.status === 'won') {
                     stakeAtual = config.stakeInicial;
@@ -237,6 +269,8 @@ function iniciarMotor(tipoRobo, config) {
                         return;
                     }
                 }
+
+                // Avança o passo de alternância em loop de 0 a 7 (idêntico ao modulo 8 do XML)
                 passoAlternancia = (passoAlternancia + 1) % 8;
             }
         }
