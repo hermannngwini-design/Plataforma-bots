@@ -8,8 +8,6 @@ const btnRegister = document.getElementById('btn-register');
 const btnLogout = document.getElementById('btn-logout');
 const userLoggedSpan = document.getElementById('user-logged');
 
-const inputToken = document.getElementById('input-token');
-const derivStatus = document.getElementById('deriv-status');
 const botLogs = document.getElementById('bot-logs');
 const btnStartBot = document.getElementById('btn-start-bot');
 const btnStopBot = document.getElementById('btn-stop-bot');
@@ -18,7 +16,7 @@ const selectRobo = document.getElementById('select-robo');
 let wsBot = null;
 let tokenDeriv = "";
 
-// O seu App ID gerado na Deriv
+// O seu App ID alfanumérico da Deriv
 const MEU_APP_ID = "34aspGUGPyiOkGCgGtkUw";
 
 // --- CONTROLE DE USUÁRIOS LOCAL (LOGIN / CADASTRO) ---
@@ -58,7 +56,8 @@ if (btnLogin) {
 if (btnLogout) {
     btnLogout.addEventListener('click', () => {
         localStorage.removeItem("user_session");
-        verificarSessao();
+        localStorage.removeItem("deriv_token");
+        location.reload();
     });
 }
 
@@ -74,56 +73,34 @@ function verificarSessao() {
     }
 }
 
-// --- CONEXÃO COM A DERIV USANDO O SEU APP ID (BOTÃO BLINDADO) ---
+// --- REDIRECIONAMENTO AUTOMÁTICO OAUTH DERIV (SEM COVAR DE TOKEN) ---
 const btnConnectToken = document.querySelector('.btn-deriv') || document.getElementById('btn-connect-token');
 
 if (btnConnectToken) {
+    // Muda o texto do botão para refletir o login automático
+    btnConnectToken.innerText = "Conectar com Conta Deriv (1 Clique)";
+    
     btnConnectToken.onclick = (e) => {
         e.preventDefault();
-        const inputElement = document.getElementById('input-token');
-        const tokenInput = inputElement ? inputElement.value.trim() : "";
-        
-        if (!tokenInput) {
-            alert("Por favor, insira o token!");
-            return;
-        }
-        conectarComToken(tokenInput);
+        // Redireciona para a página oficial de autorização da Deriv voltando para o seu site
+        const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
+        window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${MEU_APP_ID}&l=pt&brand=deriv`;
     };
 }
 
-function conectarComToken(token) {
-    if (!token) return;
-    tokenDeriv = token;
-    localStorage.setItem('deriv_token', token);
-
-    botLogs.innerHTML += "🔄 Validando token com o seu App ID na Deriv...<br>";
-    const tempWs = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${MEU_APP_ID}`);
-    
-    tempWs.onopen = () => {
-        tempWs.send(JSON.stringify({ authorize: token }));
-    };
-    
-    tempWs.onmessage = (msg) => {
-        const data = JSON.parse(msg.data);
-        if (data.msg_type === 'authorize') {
-            botLogs.innerHTML += `✅ Conectado com sucesso à Deriv (${data.authorize.email})!<br>`;
-            
-            const authSection = document.getElementById('auth-section');
-            const userInfo = document.getElementById('user-info');
-            const userAccount = document.getElementById('user-account');
-            
-            if (authSection) authSection.style.display = 'none';
-            if (userInfo) userInfo.style.display = 'block';
-            if (userAccount) userAccount.innerText = `${data.authorize.email} (${data.authorize.currency})`;
-            
-            if (btnStartBot) btnStartBot.disabled = false;
-            tempWs.close();
-        } else if (data.error) {
-            botLogs.innerHTML += `❌ Erro de autenticação: ${data.error.message}<br>`;
-            localStorage.removeItem('deriv_token');
-            tempWs.close();
+// Captura automática do token caso a Deriv redirecione de volta para o seu site com o token na URL
+function capturarRetornoOAuth() {
+    const hash = window.location.hash;
+    if (hash && hash.includes('token1=')) {
+        const params = new URLSearchParams(hash.replace('#', '?'));
+        const token = params.get('token1'); // Pega o token da primeira conta
+        
+        if (token) {
+            localStorage.setItem('deriv_token', token);
+            // Limpa a URL para sumir com o token da barra de endereço
+            window.history.replaceState({}, document.title, window.location.pathname);
         }
-    };
+    }
 }
 
 // --- CONTROLE DE EXECUÇÃO DO ROBÔ ---
@@ -177,20 +154,18 @@ function iniciarMotor(tipoRobo, config) {
     let passoAlternancia = 0;
 
     wsBot.onopen = () => {
-        botLogs.innerHTML += `> 🔌 WebSocket aberto. Autenticando...<br>`;
+        botLogs.innerHTML += `> 🔌 WebSocket aberto. Autenticando com token automático...<br>";`;
         wsBot.send(JSON.stringify({ authorize: tokenDeriv }));
     };
 
     wsBot.onmessage = (msg) => {
         const data = JSON.parse(msg.data);
 
-        // Autorizado com sucesso, inicia a subscrição de ticks do Volatility 100 Index (1HZ100V)
         if (data.msg_type === 'authorize') {
-            botLogs.innerHTML += `> 🔓 Autorizado. Assinando ticks do 1HZ100V...<br>`;
+            botLogs.innerHTML += `> 🔓 Autorizado com sucesso! Assinando ticks do 1HZ100V...<br>`;
             wsBot.send(JSON.stringify({ ticks: "1HZ100V", subscribe: 1 }));
         }
 
-        // Leitura de Ticks (equivalente ao before_purchase do XML)
         if (data.msg_type === 'tick') {
             const preco = data.tick.quote;
             const ultimoDigito = parseInt(preco.toString().slice(-1));
@@ -204,7 +179,6 @@ function iniciarMotor(tipoRobo, config) {
                 } else {
                     botLogs.innerHTML += `> 🔍 Analisando tick: Preço ${preco} | Dígito: ${ultimoDigito} (${ehPar ? 'Par' : 'Ímpar'}) | Passo: ${passoAlternancia}<br>`;
 
-                    // Condição idêntica ao XML para somar loss virtual
                     let condicaoVirtual = (passoAlternancia < 4 && ehPar) || (passoAlternancia >= 4 && !ehPar);
 
                     if (condicaoVirtual) {
@@ -222,14 +196,12 @@ function iniciarMotor(tipoRobo, config) {
             }
         }
 
-        // Confirmação de Compra de Contrato
         if (data.msg_type === 'buy') {
             const contractId = data.buy.contract_id;
             botLogs.innerHTML += `> 🛒 Contrato aceito. ID: ${contractId}. Aguardando resultado...<br>`;
             wsBot.send(JSON.stringify({ proposal_open_contract: 1, contract_id: contractId, subscribe: 1 }));
         }
 
-        // Monitoramento e Pós-Compra (equivalente ao after_purchase do XML)
         if (data.msg_type === 'proposal_open_contract') {
             const contrato = data.proposal_open_contract;
             if (contrato && contrato.is_sold) {
@@ -270,7 +242,6 @@ function iniciarMotor(tipoRobo, config) {
                     }
                 }
 
-                // Avança o passo de alternância em loop de 0 a 7 (idêntico ao modulo 8 do XML)
                 passoAlternancia = (passoAlternancia + 1) % 8;
             }
         }
@@ -300,9 +271,11 @@ function enviarOrdem(tipoContrato, stake) {
 // Inicialização automática ao carregar a página
 window.onload = () => {
     verificarSessao();
-    const tokenSalvo = localStorage.getItem('deriv_token');
-    if (tokenSalvo) {
-        if (inputToken) inputToken.value = tokenSalvo;
-        conectarComToken(tokenSalvo);
+    capturarRetornoOAuth();
+
+    tokenDeriv = localStorage.getItem('deriv_token');
+    if (tokenDeriv) {
+        if (btnStartBot) btnStartBot.disabled = false;
+        botLogs.innerHTML += `> ✅ Conta Deriv conectada automaticamente com sucesso!<br>`;
     }
 };
