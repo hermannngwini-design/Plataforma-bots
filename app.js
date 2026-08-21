@@ -32,11 +32,14 @@ window.conectarComToken = function() {
             userAccount.innerText = data.authorize.email || "Conta Ativa";
             userInfo.style.display = "block";
             
-            // Habilita o botão de Iniciar Robô de forma forçada
+            // FORÇA TOTAL PARA ACENDER E HABILITAR O BOTÃO
             const btnIniciar = document.getElementById('btn-start-bot');
             if (btnIniciar) {
                 btnIniciar.disabled = false;
                 btnIniciar.removeAttribute('disabled');
+                btnIniciar.style.background = '#22c55e';
+                btnIniciar.style.cursor = 'pointer';
+                btnIniciar.style.opacity = '1';
             }
         } else if (data.error) {
             botLogs.innerHTML += "❌ Erro de Token: " + data.error.message + "<br>";
@@ -50,8 +53,15 @@ window.desconectar = function() {
     tokenDeriv = "";
     document.getElementById('input-token').value = "";
     document.getElementById('user-info').style.display = "none";
-    document.getElementById('btn-start-bot').disabled = true;
-    document.getElementById('btn-stop-bot').disabled = true;
+    
+    const btnIniciar = document.getElementById('btn-start-bot');
+    const btnParar = document.getElementById('btn-stop-bot');
+    if (btnIniciar) {
+        btnIniciar.disabled = true;
+        btnIniciar.style.opacity = '0.6';
+    }
+    if (btnParar) btnParar.disabled = true;
+    
     document.getElementById('bot-logs').innerHTML += "🔌 Desconectado.<br>";
 };
 
@@ -68,6 +78,7 @@ window.iniciarRobo = function() {
 
     isRunning = true;
     btnIniciar.disabled = true;
+    btnIniciar.style.opacity = '0.6';
     btnParar.disabled = false;
 
     const stakeInicial = parseFloat(document.getElementById('stake-inicial').value) || 0.35;
@@ -184,7 +195,12 @@ function enviarCompra(tipoContrato, stake) {
 
 window.pararRobo = function() {
     isRunning = false;
-    document.getElementById('btn-start-bot').disabled = false;
-    document.getElementById('btn-stop-bot').disabled = true;
+    const btnIniciar = document.getElementById('btn-start-bot');
+    const btnParar = document.getElementById('btn-stop-bot');
+    if (btnIniciar) {
+        btnIniciar.disabled = false;
+        btnIniciar.style.opacity = '1';
+    }
+    if (btnParar) btnParar.disabled = true;
     document.getElementById('bot-logs').innerHTML += "⏹️ Robô parado.<br>";
 };
