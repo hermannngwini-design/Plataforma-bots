@@ -2,7 +2,6 @@ let wsBot = null;
 let tokenDeriv = "";
 let isRunning = false;
 
-// 1. Função de Conexão com a Deriv
 window.conectarComToken = function() {
     const inputToken = document.getElementById('input-token');
     const botLogs = document.getElementById('bot-logs');
@@ -32,14 +31,12 @@ window.conectarComToken = function() {
             userAccount.innerText = data.authorize.email || "Conta Ativa";
             userInfo.style.display = "block";
             
-            // FORÇA TOTAL PARA ACENDER E HABILITAR O BOTÃO
+            // Libera o botão de iniciar adicionando a classe ativa e removendo o disabled
             const btnIniciar = document.getElementById('btn-start-bot');
             if (btnIniciar) {
                 btnIniciar.disabled = false;
                 btnIniciar.removeAttribute('disabled');
-                btnIniciar.style.background = '#22c55e';
-                btnIniciar.style.cursor = 'pointer';
-                btnIniciar.style.opacity = '1';
+                btnIniciar.classList.add('ativo');
             }
         } else if (data.error) {
             botLogs.innerHTML += "❌ Erro de Token: " + data.error.message + "<br>";
@@ -47,7 +44,6 @@ window.conectarComToken = function() {
     };
 };
 
-// 2. Função de Desconectar
 window.desconectar = function() {
     if (wsBot) wsBot.close();
     tokenDeriv = "";
@@ -58,14 +54,13 @@ window.desconectar = function() {
     const btnParar = document.getElementById('btn-stop-bot');
     if (btnIniciar) {
         btnIniciar.disabled = true;
-        btnIniciar.style.opacity = '0.6';
+        btnIniciar.classList.remove('ativo');
     }
     if (btnParar) btnParar.disabled = true;
     
     document.getElementById('bot-logs').innerHTML += "🔌 Desconectado.<br>";
 };
 
-// 3. Motor de Operações do Robô (Estratégia 4x4)
 window.iniciarRobo = function() {
     const botLogs = document.getElementById('bot-logs');
     const btnIniciar = document.getElementById('btn-start-bot');
@@ -78,7 +73,7 @@ window.iniciarRobo = function() {
 
     isRunning = true;
     btnIniciar.disabled = true;
-    btnIniciar.style.opacity = '0.6';
+    btnIniciar.classList.remove('ativo');
     btnParar.disabled = false;
 
     const stakeInicial = parseFloat(document.getElementById('stake-inicial').value) || 0.35;
@@ -199,7 +194,7 @@ window.pararRobo = function() {
     const btnParar = document.getElementById('btn-stop-bot');
     if (btnIniciar) {
         btnIniciar.disabled = false;
-        btnIniciar.style.opacity = '1';
+        btnIniciar.classList.add('ativo');
     }
     if (btnParar) btnParar.disabled = true;
     document.getElementById('bot-logs').innerHTML += "⏹️ Robô parado.<br>";
