@@ -24,7 +24,6 @@ if (btnConectar) {
 
         botLogs.innerHTML = "🔄 Conectando ao servidor da Deriv...<br>";
         
-        // Abre o WebSocket oficial
         wsBot = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
         
         wsBot.onopen = () => {
@@ -39,7 +38,13 @@ if (btnConectar) {
                 botLogs.innerHTML += "✅ Conta conectada com sucesso!<br>";
                 userAccount.innerText = data.authorize.email || "Conta Ativa";
                 userInfo.style.display = "block";
-                btnIniciar.disabled = false;
+                
+                // FORÇA A HABILITAÇÃO DO BOTÃOaqui explicitamente
+                if (btnIniciar) {
+                    btnIniciar.disabled = false;
+                    btnIniciar.style.opacity = "1";
+                    btnIniciar.style.cursor = "pointer";
+                }
             } else if (data.error) {
                 botLogs.innerHTML += "❌ Erro de Token: " + data.error.message + "<br>";
             }
@@ -57,8 +62,8 @@ window.desconectar = function() {
     tokenDeriv = "";
     inputToken.value = "";
     userInfo.style.display = "none";
-    btnIniciar.disabled = true;
-    btnParar.disabled = true;
+    if (btnIniciar) btnIniciar.disabled = true;
+    if (btnParar) btnParar.disabled = true;
     botLogs.innerHTML += "🔌 Desconectado.<br>";
 };
 
@@ -77,7 +82,7 @@ if (btnIniciar) {
 
         isRunning = true;
         btnIniciar.disabled = true;
-        btnParar.disabled = false;
+        if (btnParar) btnParar.disabled = false;
 
         const stakeInicial = parseFloat(document.getElementById('stake-inicial').value) || 0.35;
         const metaLossVirtual = parseInt(document.getElementById('meta-loss-virtual').value) || 4;
@@ -95,10 +100,8 @@ if (btnIniciar) {
 
         botLogs.innerHTML += "🚀 Robô iniciado! Assinando ticks do 1HZ100V...<br>";
         
-        // Assina os ticks do Volatility 100 Index
         wsBot.send(JSON.stringify({ ticks: "1HZ100V", subscribe: 1 }));
 
-        // Sobrescreve o ouvinte de mensagens para processar o robô
         wsBot.onmessage = (evt) => {
             if (!isRunning) return;
             const data = JSON.parse(evt.data);
@@ -198,8 +201,8 @@ function enviarCompra(tipoContrato, stake) {
 
 function pararRoboUI() {
     isRunning = false;
-    btnIniciar.disabled = false;
-    btnParar.disabled = true;
+    if (btnIniciar) btnIniciar.disabled = false;
+    if (btnParar) btnParar.disabled = true;
     botLogs.innerHTML += "⏹️ Robô parado.<br>";
 }
 
