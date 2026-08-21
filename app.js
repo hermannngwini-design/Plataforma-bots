@@ -2,7 +2,7 @@ let wsBot = null;
 let tokenDeriv = "";
 let isRunning = false;
 
-// Função chamada pelo botão "Conectar Conta" no HTML
+// Função chamada pelo botão "Conectar Conta"
 window.conectarComToken = function() {
     const inputToken = document.getElementById('input-token');
     const botLogs = document.getElementById('bot-logs');
@@ -16,12 +16,11 @@ window.conectarComToken = function() {
         return;
     }
 
-    botLogs.innerHTML = "🔄 Conectando ao servidor da Deriv...<br>";
+    botLogs.innerHTML = "🔄 Conectando...<br>";
     
     wsBot = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
     
     wsBot.onopen = () => {
-        botLogs.innerHTML += "🔌 Canal aberto. Autorizando token...<br>";
         wsBot.send(JSON.stringify({ authorize: tokenDeriv }));
     };
 
@@ -29,29 +28,18 @@ window.conectarComToken = function() {
         const data = JSON.parse(msg.data);
         
         if (data.msg_type === 'authorize') {
-            botLogs.innerHTML += "✅ Conta conectada com sucesso!<br>";
+            botLogs.innerHTML += "✅ Conectado com sucesso!<br>";
             userAccount.innerText = data.authorize.email || "Conta Ativa";
             userInfo.style.display = "block";
             
-            // BUSCA DIRETA E FORÇADA NO DOM PARA HABILITAR O BOTÃO
-            const botaoIniciar = document.getElementById('btn-start-bot');
-            if (botaoIniciar) {
-                botaoIniciar.removeAttribute('disabled');
-                botaoIniciar.disabled = false;
-                botaoIniciar.style.opacity = "1";
-                botaoIniciar.style.cursor = "pointer";
-                botLogs.innerHTML += "🟢 Botão 'Iniciar Robô' liberado!<br>";
-            } else {
-                botLogs.innerHTML += "❌ Erro: Botão #btn-start-bot não encontrado no HTML.<br>";
+            // Habilita o botão de Iniciar Robô com segurança
+            const btnIniciar = document.getElementById('btn-start-bot');
+            if (btnIniciar) {
+                btnIniciar.disabled = false;
             }
-
         } else if (data.error) {
             botLogs.innerHTML += "❌ Erro de Token: " + data.error.message + "<br>";
         }
-    };
-
-    wsBot.onerror = () => {
-        botLogs.innerHTML += "❌ Erro na conexão WebSocket.<br>";
     };
 };
 
@@ -60,16 +48,12 @@ window.desconectar = function() {
     tokenDeriv = "";
     document.getElementById('input-token').value = "";
     document.getElementById('user-info').style.display = "none";
-    
-    const btnIniciar = document.getElementById('btn-start-bot');
-    const btnParar = document.getElementById('btn-stop-bot');
-    if (btnIniciar) btnIniciar.disabled = true;
-    if (btnParar) btnParar.disabled = true;
-    
+    document.getElementById('btn-start-bot').disabled = true;
+    document.getElementById('btn-stop-bot').disabled = true;
     document.getElementById('bot-logs').innerHTML += "🔌 Desconectado.<br>";
 };
 
-// Função chamada pelo botão "Iniciar Robô" no HTML
+// Motor do Robô (Estratégia 4x4)
 window.iniciarRobo = function() {
     const botLogs = document.getElementById('bot-logs');
     const btnIniciar = document.getElementById('btn-start-bot');
@@ -77,11 +61,6 @@ window.iniciarRobo = function() {
 
     if (!tokenDeriv) {
         alert("Conecte a conta primeiro!");
-        return;
-    }
-
-    if (!wsBot || wsBot.readyState !== WebSocket.OPEN) {
-        alert("A conexão com a Deriv caiu. Reconecte o token.");
         return;
     }
 
@@ -103,7 +82,7 @@ window.iniciarRobo = function() {
     let passoAlternancia = 0;
     let lucroTotal = 0;
 
-    botLogs.innerHTML += "🚀 Robô iniciado! Assinando ticks do 1HZ100V...<br>";
+    botLogs.innerHTML += "🚀 Iniciando operações...<br>";
     
     wsBot.send(JSON.stringify({ ticks: "1HZ100V", subscribe: 1 }));
 
@@ -118,7 +97,7 @@ window.iniciarRobo = function() {
 
             if (emModoReal) {
                 const tipoContrato = passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN";
-                botLogs.innerHTML += `🎯 [Real] Passo ${passoAlternancia} | Comprando ${tipoContrato} | Stake: $${stakeAtual}<br>";
+                botLogs.innerHTML += `🎯 [Real] Passo ${passoAlternancia} | Comprando ${tipoContrato} | Stake: $${stakeAtual}<br>`;
                 enviarCompra(tipoContrato, stakeAtual);
             } else {
                 let condicaoVirtual = (passoAlternancia < 4 && ehPar) || (passoAlternancia >= 4 && !ehPar);
@@ -133,8 +112,6 @@ window.iniciarRobo = function() {
                         const tipoContrato = passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN";
                         enviarCompra(tipoContrato, stakeAtual);
                     }
-                } else {
-                    botLogs.innerHTML += `🔍 Analisando tick: ${ultimoDigito} (${ehPar ? 'Par' : 'Ímpar'}) | Passo: ${passoAlternancia}<br>`;
                 }
             }
         }
@@ -205,9 +182,7 @@ function enviarCompra(tipoContrato, stake) {
 
 window.pararRobo = function() {
     isRunning = false;
-    const btnIniciar = document.getElementById('btn-start-bot');
-    const btnParar = document.getElementById('btn-stop-bot');
-    if (btnIniciar) btnIniciar.disabled = false;
-    if (btnParar) btnParar.disabled = true;
+    document.getElementById('btn-start-bot').disabled = false;
+    document.getElementById('btn-stop-bot').disabled = true;
     document.getElementById('bot-logs').innerHTML += "⏹️ Robô parado.<br>";
 };
