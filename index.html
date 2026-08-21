@@ -3,62 +3,239 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Operações</title>
+    <title>Painel Deriv - Robô 4x4</title>
     <style>
-        body { background: #111; color: #fff; font-family: sans-serif; padding: 20px; }
-        .container { max-width: 400px; margin: auto; }
-        label { display: block; margin-top: 10px; font-weight: bold; color: #aaa; }
-        input { width: 100%; padding: 10px; margin-top: 5px; border-radius: 4px; border: 1px solid #444; background: #222; color: #fff; }
-        button { width: 100%; padding: 15px; margin-top: 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 16px; }
-        #btn-connect { background: #007bff; color: white; }
-        #btn-start { background: #28a745; color: white; }
-        #logs { margin-top: 20px; padding: 10px; background: #000; color: #0f0; font-family: monospace; height: 100px; overflow-y: auto; font-size: 12px; }
+        body { background: #0f172a; color: #fff; font-family: sans-serif; padding: 15px; margin: 0; }
+        .container { max-width: 450px; margin: 0 auto; background: #1e293b; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; font-size: 13px; color: #94a3b8; }
+        input { width: 100%; padding: 10px; background: #0f172a; border: 1px solid #334155; color: #fff; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 5px; font-size: 14px; }
+        #btn-connect { background: #3b82f6; color: white; }
+        #btn-start-bot { background: #22c55e; color: white; }
+        #btn-stop-bot { background: #ef4444; color: white; display: none; }
+        button:disabled { background: #334155 !important; cursor: not-allowed; opacity: 0.6; }
+        #bot-logs { background: #0f172a; border: 1px solid #334155; padding: 10px; height: 160px; overflow-y: auto; font-family: monospace; font-size: 11px; margin-top: 15px; border-radius: 4px; color: #38bdf8; }
+        .user-info { background: #0f172a; padding: 8px; border-radius: 4px; border: 1px solid #22c55e; margin-bottom: 12px; display: none; font-size: 12px; color: #22c55e; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Painel do Robô</h2>
-    <label>Token:</label>
-    <input type="text" id="token" placeholder="Cole seu Token">
-    <button id="btn-connect" onclick="conectar()">Conectar Conta</button>
-
-    <label>Stake Inicial:</label>
-    <input type="number" id="stake" value="0.35">
-    
-    <label>Loss Virtual:</label>
-    <input type="number" id="loss" value="4">
-    
-    <label>Máximo Martingale:</label>
-    <input type="number" id="martingale" value="10">
-
-    <button id="btn-start" onclick="iniciar()">Iniciar Robô</button>
-    <div id="logs">Aguardando...</div>
-</div>
-
-<script>
-    let conectado = false;
-
-    function conectar() {
-        const token = document.getElementById('token').value;
-        if(!token) { alert("Coloque o token!"); return; }
-        document.getElementById('logs').innerHTML = "Conectado com sucesso!<br>";
-        conectado = true;
-        document.getElementById('btn-connect').style.background = "#555";
-        document.getElementById('btn-connect').innerText = "Conectado";
-    }
-
-    function iniciar() {
-        if(!conectado) { alert("Conecte primeiro!"); return; }
+    <div class="container">
+        <h2>Painel Deriv - Robô 4x4</h2>
         
-        const stake = document.getElementById('stake').value;
-        const loss = document.getElementById('loss').value;
-        const mart = document.getElementById('martingale').value;
-        
-        document.getElementById('logs').innerHTML += `Iniciando: Stake ${stake}, Loss ${loss}, Mart ${mart}...<br>`;
-        alert("Robô iniciado com sucesso!");
-    }
-</script>
+        <div class="form-group">
+            <label>Token da Conta Deriv:</label>
+            <input type="password" id="input-token" placeholder="Cole seu token aqui...">
+            <button id="btn-connect" onclick="conectarComToken()">Conectar Conta</button>
+        </div>
 
+        <div id="user-info" class="user-info">
+            🟢 Conectado: <span id="user-account">Conta Ativa</span>
+        </div>
+
+        <div class="form-group">
+            <label>Stake Inicial (USD):</label>
+            <input type="number" id="stake-inicial" value="0.35" step="0.01">
+        </div>
+        <div class="form-group">
+            <label>Meta de Loss Virtual:</label>
+            <input type="number" id="meta-loss-virtual" value="4">
+        </div>
+        <div class="form-group">
+            <label>Máximo de Martingale:</label>
+            <input type="number" id="max-martingale" value="10">
+        </div>
+        <div class="form-group">
+            <label>Fator Multiplicador (Martingale):</label>
+            <input type="number" id="fator-multiplicador" value="1.8" step="0.1">
+        </div>
+        <div class="form-group">
+            <label>Stop Win (USD):</label>
+            <input type="number" id="stop-win" value="50">
+        </div>
+        <div class="form-group">
+            <label>Stop Loss (USD):</label>
+            <input type="number" id="stop-loss" value="50">
+        </div>
+
+        <button id="btn-start-bot" disabled onclick="iniciarRobo()">▶️ Iniciar Robô</button>
+        <button id="btn-stop-bot" onclick="pararRobo()">⏸️ Parar Robô</button>
+
+        <h3>Logs do Sistema</h3>
+        <div id="bot-logs">Aguardando conexão...<br></div>
+    </div>
+
+    <script>
+        let wsBot = null;
+        let tokenDeriv = "";
+        let isRunning = false;
+
+        function conectarComToken() {
+            const inputToken = document.getElementById('input-token').value.trim();
+            const botLogs = document.getElementById('bot-logs');
+            const userInfo = document.getElementById('user-info');
+            const userAccount = document.getElementById('user-account');
+            const btnIniciar = document.getElementById('btn-start-bot');
+
+            if (!inputToken) {
+                alert("Cole o seu token da Deriv!");
+                return;
+            }
+
+            tokenDeriv = inputToken;
+            botLogs.innerHTML += "🔄 Conectando à Deriv...<br>";
+
+            wsBot = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
+
+            wsBot.onopen = () => {
+                wsBot.send(JSON.stringify({ authorize: tokenDeriv }));
+            };
+
+            wsBot.onmessage = (msg) => {
+                const data = JSON.parse(msg.data);
+
+                if (data.msg_type === 'authorize') {
+                    botLogs.innerHTML += "✅ Conectado com sucesso!<br>";
+                    userAccount.innerText = data.authorize.email || "Conta Ativa";
+                    userInfo.style.display = "block";
+                    btnIniciar.disabled = false;
+                } else if (data.error) {
+                    botLogs.innerHTML += "❌ Erro de Token: " + data.error.message + "<br>";
+                }
+            };
+        }
+
+        function iniciarRobo() {
+            const botLogs = document.getElementById('bot-logs');
+            const btnIniciar = document.getElementById('btn-start-bot');
+            const btnParar = document.getElementById('btn-stop-bot');
+
+            if (!tokenDeriv) {
+                alert("Conecte a conta primeiro!");
+                return;
+            }
+
+            isRunning = true;
+            btnIniciar.style.display = "none";
+            btnParar.style.display = "block";
+
+            const stakeInicial = parseFloat(document.getElementById('stake-inicial').value) || 0.35;
+            const metaLossVirtual = parseInt(document.getElementById('meta-loss-virtual').value) || 4;
+            const maxMartingale = parseInt(document.getElementById('max-martingale').value) || 10;
+            const fatorMultiplicador = parseFloat(document.getElementById('fator-multiplicador').value) || 1.8;
+            const stopWin = parseFloat(document.getElementById('stop-win').value) || 50;
+            const stopLoss = parseFloat(document.getElementById('stop-loss').value) || 50;
+
+            let stakeAtual = stakeInicial;
+            let contadorLossVirtual = 0;
+            let contadorMartingale = 0;
+            let emModoReal = false;
+            let passoAlternancia = 0;
+            let lucroTotal = 0;
+
+            botLogs.innerHTML += "🚀 Robô iniciado! Monitorando ticks (1HZ100V)...<br>";
+            wsBot.send(JSON.stringify({ ticks: "1HZ100V", subscribe: 1 }));
+
+            wsBot.onmessage = (evt) => {
+                if (!isRunning) return;
+                const data = JSON.parse(evt.data);
+
+                if (data.msg_type === 'tick') {
+                    const preco = data.tick.quote;
+                    const ultimoDigito = parseInt(preco.toString().slice(-1));
+                    const ehPar = ultimoDigito % 2 === 0;
+
+                    if (emModoReal) {
+                        const tipoContrato = passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN";
+                        botLogs.innerHTML += `🎯 [Real] Passo ${passoAlternancia} | Comprando ${tipoContrato} | Stake: $${stakeAtual}<br>";
+                        enviarCompra(tipoContrato, stakeAtual);
+                    } else {
+                        let condicaoVirtual = (passoAlternancia < 4 && ehPar) || (passoAlternancia >= 4 && !ehPar);
+                        
+                        if (condicaoVirtual) {
+                            contadorLossVirtual++;
+                            botLogs.innerHTML += `⚠️ Loss virtual (${contadorLossVirtual}/${metaLossVirtual}) | Dígito: ${ultimoDigito}<br>`;
+                            
+                            if (contadorLossVirtual >= metaLossVirtual) {
+                                emModoReal = true;
+                                botLogs.innerHTML += "🚀 Meta de Loss Virtual atingida! Entrando no Modo Real.<br>";
+                                const tipoContrato = passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN";
+                                enviarCompra(tipoContrato, stakeAtual);
+                            }
+                        }
+                    }
+                }
+
+                if (data.msg_type === 'buy') {
+                    const contractId = data.buy.contract_id;
+                    wsBot.send(JSON.stringify({ proposal_open_contract: 1, contract_id: contractId, subscribe: 1 }));
+                }
+
+                if (data.msg_type === 'proposal_open_contract') {
+                    const contrato = data.proposal_open_contract;
+                    if (contrato && contrato.is_sold) {
+                        const lucroRodada = contrato.profit;
+                        lucroTotal += lucroRodada;
+                        botLogs.innerHTML += `📊 Resultado: ${contrato.status.toUpperCase()} | Lucro: $${lucroRodada.toFixed(2)} | Acumulado: $${lucroTotal.toFixed(2)}<br>`;
+
+                        if (lucroTotal >= stopWin) {
+                            botLogs.innerHTML += "🏆 Stop Win atingido!<br>";
+                            pararRobo();
+                            return;
+                        }
+                        if (lucroTotal <= -stopLoss) {
+                            botLogs.innerHTML += "🛑 Stop Loss atingido!<br>";
+                            pararRobo();
+                            return;
+                        }
+
+                        if (contrato.status === 'won') {
+                            stakeAtual = stakeInicial;
+                            contadorMartingale = 0;
+                            contadorLossVirtual = 0;
+                            emModoReal = false;
+                            botLogs.innerHTML += "✅ Win! Reiniciando ciclo virtual.<br>";
+                        } else {
+                            if (contadorMartingale < maxMartingale) {
+                                contadorMartingale++;
+                                stakeAtual = Number((stakeAtual * fatorMultiplicador).toFixed(2));
+                                botLogs.innerHTML += `🔄 Martingale (${contadorMartingale}/${maxMartingale}) | Novo Stake: $${stakeAtual}<br>`;
+                                emModoReal = true;
+                            } else {
+                                botLogs.innerHTML += "❌ Limite de Martingale esgotado.<br>";
+                                pararRobo();
+                                return;
+                            }
+                        }
+                        passoAlternancia = (passoAlternancia + 1) % 8;
+                    }
+                }
+            };
+        }
+
+        function enviarCompra(tipoContrato, stake) {
+            wsBot.send(JSON.stringify({
+                buy: 1,
+                price: stake,
+                parameters: {
+                    amount: stake,
+                    basis: "stake",
+                    contract_type: tipoContrato,
+                    currency: "USD",
+                    duration: 1,
+                    duration_unit: "t",
+                    symbol: "1HZ100V"
+                }
+            }));
+        }
+
+        function pararRobo() {
+            isRunning = false;
+            document.getElementById('btn-start-bot').style.display = "block";
+            document.getElementById('btn-stop-bot').style.display = "none";
+            document.getElementById('bot-logs').innerHTML += "⏹️ Robô parado pelo usuário.<br>";
+        }
+    </script>
 </body>
 </html>
