@@ -1,13 +1,17 @@
 const inputToken = document.getElementById('input-token');
-const btnConectar = document.querySelector('.btn-deriv'); // O botão vermelho
+const btnConectar = document.querySelector('.btn-deriv');
 const btnIniciar = document.getElementById('btn-start-bot');
+const btnParar = document.getElementById('btn-stop-bot');
 const botLogs = document.getElementById('bot-logs');
+const userInfo = document.getElementById('user-info');
+const userAccount = document.getElementById('user-account');
 
-let wsBot;
+let wsBot = null;
 let tokenDeriv = "";
+let isRunning = false;
 
-// Força a conexão ao clicar no botão
-btnConectar.onclick = () => {
+// Função chamada pelo botão "Conectar Conta"
+window.conectarComToken = function() {
     tokenDeriv = inputToken.value.trim();
     
     if (!tokenDeriv) {
@@ -25,8 +29,11 @@ btnConectar.onclick = () => {
 
     wsBot.onmessage = (msg) => {
         const data = JSON.parse(msg.data);
+        
         if (data.msg_type === 'authorize') {
             botLogs.innerHTML += "✅ Conectado com sucesso!<br>";
+            userAccount.innerText = data.authorize.email || "Conta Ativa";
+            userInfo.style.display = "block";
             btnIniciar.disabled = false;
         } else if (data.error) {
             botLogs.innerHTML += "❌ Erro de Token: " + data.error.message + "<br>";
@@ -34,22 +41,157 @@ btnConectar.onclick = () => {
     };
 };
 
-// Motor do Robô (Lógica 4x4)
+window.desconectar = function() {
+    if (wsBot) wsBot.close();
+    tokenDeriv = "";
+    inputToken.value = "";
+    userInfo.style.display = "none";
+    btnIniciar.disabled = true;
+    btnParar.disabled = true;
+    botLogs.innerHTML += "🔌 Desconectado.<br>";
+};
+
+// Motor do Robô (Estratégia 4x4)
 btnIniciar.onclick = () => {
-    const stake = parseFloat(document.getElementById('stake-inicial').value);
-    const metaLoss = parseInt(document.getElementById('meta-loss-virtual').value);
-    
+    if (!tokenDeriv) {
+        alert("Conecte a conta primeiro!");
+        return;
+    }
+
+    isRunning = true;
+    btnIniciar.disabled = true;
+    btnParar.disabled = false;
+
+    const stakeInicial = parseFloat(document.getElementById('stake-inicial').value) || 0.35;
+    const metaLossVirtual = parseInt(document.getElementById('meta-loss-virtual').value) || 4;
+    const maxMartingale = parseInt(document.getElementById('max-martingale').value) || 10;
+    const fatorMultiplicador = parseFloat(document.getElementById('fator-multiplicador').value) || 1.8;
+    const stopWin = parseFloat(document.getElementById('stop-win').value) || 50;
+    const stopLoss = parseFloat(document.getElementById('stop-loss').value) || 50;
+
+    let stakeAtual = stakeInicial;
+    let contadorLossVirtual = 0;
+    let contadorMartingale = 0;
+    let emModoReal = false;
+    let passoAlternancia = 0;
+    let lucroTotal = 0;
+
     botLogs.innerHTML += "🚀 Iniciando operações...<br>";
     
-    // Assina os ticks do Volatility 100 para começar a análise
+    // Assina os ticks do Volatility 100 Index (1HZ100V)
     wsBot.send(JSON.stringify({ ticks: "1HZ100V", subscribe: 1 }));
 
     wsBot.onmessage = (evt) => {
+        if (!isRunning) return;
         const data = JSON.parse(evt.data);
+
+        // Processamento de cada Tick de preço
         if (data.msg_type === 'tick') {
-            const digit = parseInt(data.tick.quote.toString().slice(-1));
-            botLogs.innerHTML += `🔍 Tick: ${digit}<br>`;
-            // Aqui entra a sua lógica de compra baseada no dígito
+            const preco = data.tick.quote;
+            const ultimoDigito = parseInt(preco.toString().slice(-1));
+            const ehPar = ultimoDigito % 2 === 0;
+
+            if (emModoReal) {
+                // Executa compra real baseada no passo
+                const tipoContrato = passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN";
+                botLogs.innerHTML += `🎯 [Real] Passo ${passoAlternancia} | Comprando ${tipoContrato} | Stake: $${stakeAtual}<br>";
+                enviarCompra(tipoContrato, stakeAtual);
+            } else {
+                // Modo Virtual (Análise)
+                let condicaoVirtual = (passoAlternancia < 4 && ehPar) || (passoAlternancia >= 4 && !ehPar);
+                
+                if (condicaoVirtual) {
+                    contadorLossVirtual++;
+                    botLogs.innerHTML += `⚠️ Loss virtual (${contadorLossVirtual}/${metaLoss}) | Dígito: ${ultimoDigito}<br>`;
+                    
+                    if (contadorLossVirtual >= metaLoss) {
+                        emModoReal = true;
+                        botLogs.innerHTML += "🚀 Meta de Loss Virtual atingida! Mudando para Modo Real.<br>";
+                        const tipoContrato = passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN";
+                        enviarCompra(tipoContrato, stakeAtual);
+                    }
+                }
+            }
+        }
+
+        // Confirmação de compra aceita
+        if (data.msg_type === 'buy') {
+            const contractId = data.buy.contract_id;
+            wsBot.send(JSON.stringify({ proposal_open_contract: 1, contract_id: contractId, subscribe: 1 }));
+        }
+
+        // Monitoramento do contrato aberto até o resultado
+        if (data.msg_type === 'proposal_open_contract') {
+            const contrato = data.proposal_open_contract;
+            if (contrato && contrato.is_sold) {
+                const lucroRodada = contrato.profit;
+                lucroTotal += lucroRodada;
+                botLogs.innerHTML += `📊 Resultado: ${contrato.status.toUpperCase()} | Lucro: $${lucroRodada.toFixed(2)} | Acumulado: $${lucroTotal.toFixed(2)}<br>`;
+
+                // Verifica Stop Win / Stop Loss
+                if (lucroTotal >= stopWin) {
+                    botLogs.innerHTML += "🏆 Stop Win atingido! Parando robô.<br>";
+                    pararRobo();
+                    return;
+                }
+                if (lucroTotal <= -stopLoss) {
+                    botLogs.innerHTML += "🛑 Stop Loss atingido! Parando robô.<br>";
+                    pararRobo();
+                    return;
+                }
+
+                if (contrato.status === 'won') {
+                    stakeAtual = stakeInicial;
+                    contadorMartingale = 0;
+                    contadorLossVirtual = 0;
+                    emModoReal = false;
+                    botLogs.innerHTML += "✅ Win! Resetando martingale e voltando ao modo virtual.<br>";
+                } else {
+                    if (contadorMartingale < maxMartingale) {
+                        contadorMartingale++;
+                        stakeAtual = Number((stakeAtual * fatorMultiplicador).toFixed(2));
+                        botLogs.innerHTML += `🔄 Martingale (${contadorMartingale}/${maxMartingale}) | Novo Stake: $${stakeAtual}<br>`;
+                        emModoReal = true;
+                    } else {
+                        botLogs.innerHTML += "❌ Limite máximo de Martingale atingido. Parando robô.<br>";
+                        pararRobo();
+                        return;
+                    }
+                }
+
+                // Avança o passo de alternância (0 a 7)
+                passoAlternancia = (passoAlternancia + 1) % 8;
+            }
         }
     };
+};
+
+function enviarCompra(tipoContrato, stake) {
+    wsBot.send(JSON.stringify({
+        buy: 1,
+        price: stake,
+        parameters: {
+            amount: stake,
+            basis: "stake",
+            contract_type: tipoContrato,
+            currency: "USD",
+            duration: 1,
+            duration_unit: "t",
+            symbol: "1HZ100V"
+        }
+    }));
+}
+
+function pararRobo() {
+    isRunning = false;
+    btnIniciar.disabled = false;
+    btnParar.disabled = true;
+    if (wsBot) {
+        // Encerra inscrições de ticks enviando um comando de esqueceu ou fechando a conexão de dados se necessário
+    }
+    botLogs.innerHTML += "⏹️ Robô parado.<br>";
+}
+
+btnParar.onclick = () => {
+    pararRobo();
 };
