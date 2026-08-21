@@ -2,7 +2,7 @@ let wsBot = null;
 let tokenDeriv = "";
 let isRunning = false;
 
-// Função chamada pelo botão "Conectar Conta"
+// 1. Função de Conexão com a Deriv
 window.conectarComToken = function() {
     const inputToken = document.getElementById('input-token');
     const botLogs = document.getElementById('bot-logs');
@@ -32,10 +32,11 @@ window.conectarComToken = function() {
             userAccount.innerText = data.authorize.email || "Conta Ativa";
             userInfo.style.display = "block";
             
-            // Habilita o botão de Iniciar Robô com segurança
+            // Habilita o botão de Iniciar Robô de forma forçada
             const btnIniciar = document.getElementById('btn-start-bot');
             if (btnIniciar) {
                 btnIniciar.disabled = false;
+                btnIniciar.removeAttribute('disabled');
             }
         } else if (data.error) {
             botLogs.innerHTML += "❌ Erro de Token: " + data.error.message + "<br>";
@@ -43,6 +44,7 @@ window.conectarComToken = function() {
     };
 };
 
+// 2. Função de Desconectar
 window.desconectar = function() {
     if (wsBot) wsBot.close();
     tokenDeriv = "";
@@ -53,7 +55,7 @@ window.desconectar = function() {
     document.getElementById('bot-logs').innerHTML += "🔌 Desconectado.<br>";
 };
 
-// Motor do Robô (Estratégia 4x4)
+// 3. Motor de Operações do Robô (Estratégia 4x4)
 window.iniciarRobo = function() {
     const botLogs = document.getElementById('bot-logs');
     const btnIniciar = document.getElementById('btn-start-bot');
