@@ -2,13 +2,12 @@ let wsBot = null;
 let tokenDeriv = "";
 let isRunning = false;
 
-// Função chamada diretamente pelo botão HTML "Conectar Conta"
+// Função chamada pelo botão "Conectar Conta" no HTML
 window.conectarComToken = function() {
     const inputToken = document.getElementById('input-token');
     const botLogs = document.getElementById('bot-logs');
     const userInfo = document.getElementById('user-info');
     const userAccount = document.getElementById('user-account');
-    const btnIniciar = document.getElementById('btn-start-bot');
 
     tokenDeriv = inputToken.value.trim();
     
@@ -34,10 +33,18 @@ window.conectarComToken = function() {
             userAccount.innerText = data.authorize.email || "Conta Ativa";
             userInfo.style.display = "block";
             
-            // Habilita o botão de Iniciar Robô agora que conectou!
-            if (btnIniciar) {
-                btnIniciar.disabled = false;
+            // BUSCA DIRETA E FORÇADA NO DOM PARA HABILITAR O BOTÃO
+            const botaoIniciar = document.getElementById('btn-start-bot');
+            if (botaoIniciar) {
+                botaoIniciar.removeAttribute('disabled');
+                botaoIniciar.disabled = false;
+                botaoIniciar.style.opacity = "1";
+                botaoIniciar.style.cursor = "pointer";
+                botLogs.innerHTML += "🟢 Botão 'Iniciar Robô' liberado!<br>";
+            } else {
+                botLogs.innerHTML += "❌ Erro: Botão #btn-start-bot não encontrado no HTML.<br>";
             }
+
         } else if (data.error) {
             botLogs.innerHTML += "❌ Erro de Token: " + data.error.message + "<br>";
         }
@@ -53,12 +60,16 @@ window.desconectar = function() {
     tokenDeriv = "";
     document.getElementById('input-token').value = "";
     document.getElementById('user-info').style.display = "none";
-    document.getElementById('btn-start-bot').disabled = true;
-    document.getElementById('btn-stop-bot').disabled = true;
+    
+    const btnIniciar = document.getElementById('btn-start-bot');
+    const btnParar = document.getElementById('btn-stop-bot');
+    if (btnIniciar) btnIniciar.disabled = true;
+    if (btnParar) btnParar.disabled = true;
+    
     document.getElementById('bot-logs').innerHTML += "🔌 Desconectado.<br>";
 };
 
-// Função chamada pelo botão "Iniciar Robô"
+// Função chamada pelo botão "Iniciar Robô" no HTML
 window.iniciarRobo = function() {
     const botLogs = document.getElementById('bot-logs');
     const btnIniciar = document.getElementById('btn-start-bot');
@@ -107,7 +118,7 @@ window.iniciarRobo = function() {
 
             if (emModoReal) {
                 const tipoContrato = passoAlternancia < 4 ? "DIGITODD" : "DIGITEVEN";
-                botLogs.innerHTML += `🎯 [Real] Passo ${passoAlternancia} | Comprando ${tipoContrato} | Stake: $${stakeAtual}<br>`;
+                botLogs.innerHTML += `🎯 [Real] Passo ${passoAlternancia} | Comprando ${tipoContrato} | Stake: $${stakeAtual}<br>";
                 enviarCompra(tipoContrato, stakeAtual);
             } else {
                 let condicaoVirtual = (passoAlternancia < 4 && ehPar) || (passoAlternancia >= 4 && !ehPar);
@@ -142,12 +153,12 @@ window.iniciarRobo = function() {
 
                 if (lucroTotal >= stopWin) {
                     botLogs.innerHTML += "🏆 Stop Win atingido! Parando robô.<br>";
-                    pararRobo();
+                    window.pararRobo();
                     return;
                 }
                 if (lucroTotal <= -stopLoss) {
                     botLogs.innerHTML += "🛑 Stop Loss atingido! Parando robô.<br>";
-                    pararRobo();
+                    window.pararRobo();
                     return;
                 }
 
@@ -165,7 +176,7 @@ window.iniciarRobo = function() {
                         emModoReal = true;
                     } else {
                         botLogs.innerHTML += "❌ Limite máximo de Martingale atingido. Parando robô.<br>";
-                        pararRobo();
+                        window.pararRobo();
                         return;
                     }
                 }
@@ -194,7 +205,9 @@ function enviarCompra(tipoContrato, stake) {
 
 window.pararRobo = function() {
     isRunning = false;
-    document.getElementById('btn-start-bot').disabled = false;
-    document.getElementById('btn-stop-bot').disabled = true;
+    const btnIniciar = document.getElementById('btn-start-bot');
+    const btnParar = document.getElementById('btn-stop-bot');
+    if (btnIniciar) btnIniciar.disabled = false;
+    if (btnParar) btnParar.disabled = true;
     document.getElementById('bot-logs').innerHTML += "⏹️ Robô parado.<br>";
 };
